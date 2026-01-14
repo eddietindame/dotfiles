@@ -1,0 +1,64 @@
+# Ignore everything by default
+*
+
+# Allow the gitignore file itself
+!.gitignore
+
+# Aerospace - window manager config
+!aerospace/
+!aerospace/**
+
+# Chezmoi - dotfile manager
+!chezmoi/
+!chezmoi/**
+
+# Fish shell
+!fish/
+!fish/**
+
+# Git config
+!git/
+!git/**
+
+# Posting - API client
+!posting/
+!posting/**
+
+# Sketchybar - status bar
+!sketchybar/
+!sketchybar/**
+
+# Ghostty - terminal
+!ghostty/
+!ghostty/**
+
+# Starship prompt
+!starship.toml
+
+# Tmux
+!tmux/
+!tmux/**
+tmux/plugins/
+
+# Neovim
+!nvim/
+!nvim/**
+
+# Block specific files/patterns even in allowed directories
+**/.DS_Store
+**/cache/
+**/Cache/
+**/caches/
+**/*.log
+**/*.lock
+**/node_modules/
+**/__pycache__/
+**/credentials.json
+**/secrets.*
+**/*.token
+**/auth.json
+**/.bak
+**.bak/
+
+# Exclude backup directories
+*.bak
