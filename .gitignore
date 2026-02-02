@@ -12,10 +12,6 @@
 !chezmoi/
 !chezmoi/**
 
-# Fish shell
-!fish/
-!fish/**
-
 # Git config
 !git/
 !git/**
@@ -48,6 +44,10 @@ tmux/plugins/
 !glow/
 !glow/**
 
+# Lazygit
+!lazygit/
+!lazygit/**
+
 # Block specific files/patterns even in allowed directories
 **/.DS_Store
 **/cache/
@@ -64,5 +64,5 @@ tmux/plugins/
 **/.bak
 **.bak/
 
-# Exclude backup directories
+# Exclude backup files & directories
 *.bak
