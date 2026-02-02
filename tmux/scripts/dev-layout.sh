@@ -19,8 +19,15 @@ tmux split-window -v -c "$WORKING_DIR"
 # Run lazygit in the bottom-right pane (pane 2)
 tmux send-keys -t "$SESSION_NAME:1.2" 'lazygit' C-m
 
+# Run claude in the top-right pane (pane 1)
+tmux send-keys -t "$SESSION_NAME:1.1" 'claude' C-m
+
+# Run nvim in the left pane (pane 0)
+tmux send-keys -t "$SESSION_NAME:1.0" 'nvim' C-m
+
 # Select the main left pane
 tmux select-pane -t "$SESSION_NAME:1.0"
 
 # Attach to session
 tmux attach-session -t "$SESSION_NAME"
+
