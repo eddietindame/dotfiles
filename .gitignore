@@ -44,6 +44,10 @@ tmux/plugins/
 !nvim/
 !nvim/**
 
+# Glow
+!glow/
+!glow/**
+
 # Block specific files/patterns even in allowed directories
 **/.DS_Store
 **/cache/

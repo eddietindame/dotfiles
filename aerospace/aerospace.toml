@@ -57,6 +57,14 @@ run = ['layout floating']
 if.app-id = 'com.apple.systempreferences'
 run = ['layout floating']
 
+[[on-window-detected]]
+if.app-name-regex-substring = 'QuickTime Player'
+run = ['layout floating']
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'MTGA'
+run = ['layout floating']
+
 # This is a workaround for a bug with how aerospace interacts with
 # native macos tabs (which behave as windows). One Ghostty is running,
 # manually unfloat it and it will work correctly until next start
@@ -96,6 +104,10 @@ run = 'move-node-to-workspace 6'
 if.app-name-regex-substring = '^Electron$'
 run = 'move-node-to-workspace 6'
 
+[[on-window-detected]]
+if.app-name-regex-substring = 'Logic Pro'
+run = 'move-node-to-workspace 9'
+
 # Possible values: (qwerty|dvorak|colemak)
 # See https://nikitabobko.github.io/AeroSpace/guide#key-mapping
 [key-mapping]
@@ -118,7 +130,7 @@ run = 'move-node-to-workspace 6'
     outer.right =      10
 
 [workspace-to-monitor-force-assignment]
-    0 = ['secondary', 'main']
+    0 = ['main', 'secondary']
     1 = ['secondary', 'main']
     2 = ['secondary', 'main']
     3 = ['secondary', 'main']
@@ -165,6 +177,9 @@ run = 'move-node-to-workspace 6'
     # See: https://nikitabobko.github.io/AeroSpace/commands#layout
     alt-slash = 'layout tiles horizontal vertical'
     alt-comma = 'layout accordion horizontal vertical'
+
+    # See: https://nikitabobko.github.io/AeroSpace/commands#fullscreen
+    alt-f = 'fullscreen'
 
     # See: https://nikitabobko.github.io/AeroSpace/commands#focus
     alt-h = 'focus left'
