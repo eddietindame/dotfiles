@@ -127,6 +127,9 @@ run = 'move-node-to-workspace 9'
 #                 Monitor pattern is the same as for 'workspace-to-monitor-force-assignment'.
 #                 See:
 #                 https://nikitabobko.github.io/AeroSpace/guide#assign-workspaces-to-monitors
+# NOTE: outer.left and outer.right are modified automatically by the zen mode
+# script (scripts/zen-mode.sh). Do not be alarmed if they temporarily show
+# per-monitor array values — they are restored to 10 when zen mode is toggled off.
 [gaps]
     inner.horizontal = 10
     inner.vertical =   10
