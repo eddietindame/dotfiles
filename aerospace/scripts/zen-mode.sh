@@ -10,11 +10,12 @@
 # Config: ~/.config/aerospace/zen-mode.conf
 # State:  /tmp/aerospace-zen-mode (presence = zen mode is active)
 #         /tmp/aerospace-zen-wallpaper (saved wallpaper path for restore)
+#         /tmp/aerospace-zen-top-gap (saved outer.top value for restore)
 #
 # NOTE: AeroSpace has no CLI command to change gaps at runtime, so this script
-# modifies aerospace.toml directly (the outer.left and outer.right gap values)
+# modifies aerospace.toml directly (outer.left, outer.right, and outer.top)
 # via sed, then runs `aerospace reload-config` to apply. The values are always
-# restored to their normal state (10) when zen mode is toggled off.
+# restored to their original state when zen mode is toggled off.
 #
 # How it works:
 #   1. Reads margin-percent, monitor target, and wallpaper settings from zen-mode.conf
@@ -23,12 +24,14 @@
 #      - Calculates margin = width * margin-percent / 100
 #      - Edits aerospace.toml outer.left/outer.right with per-monitor array syntax:
 #        e.g. outer.left = [{ monitor."S34CG50" = 688 }, 10]
+#      - Hides sketchybar on the target monitor (keeps it on other displays)
+#        and reduces outer.top to reclaim bar space
 #      - Runs `aerospace reload-config` and switches to accordion layout
 #      - Swaps the target monitor's wallpaper (to a colour or image)
 #      - Notifies sketchybar (MODE=zen)
 #   3. On toggle OFF:
-#      - Restores outer.left and outer.right in aerospace.toml to 10
-#      - Runs `aerospace reload-config`
+#      - Restores outer.left, outer.right, and outer.top in aerospace.toml
+#      - Restores sketchybar to all displays and runs `aerospace reload-config`
 #      - Restores the original wallpaper on the target monitor
 #      - Notifies sketchybar (MODE=main)
 #
@@ -54,8 +57,11 @@ DIM_WALLPAPER=$(read_config_str dim-wallpaper)
 DIM_WALLPAPER=${DIM_WALLPAPER:-true}
 DIM_WALLPAPER_PATH=$(read_config_str dim-wallpaper-path)
 DIM_WALLPAPER_PATH=${DIM_WALLPAPER_PATH:-#000000}
+HIDE_SKETCHYBAR=$(read_config_str hide-sketchybar)
+HIDE_SKETCHYBAR=${HIDE_SKETCHYBAR:-true}
 STATE_FILE="/tmp/aerospace-zen-mode"
 WALLPAPER_STATE="/tmp/aerospace-zen-wallpaper"
+TOP_GAP_STATE="/tmp/aerospace-zen-top-gap"
 COLOR_WALLPAPER="/tmp/aerospace-zen-color.png"
 
 # Generate a small solid-colour PNG from a hex value (e.g. "#1a1a2e").
@@ -89,6 +95,18 @@ if [[ -f "$STATE_FILE" ]]; then
     rm "$STATE_FILE"
     sed -i '' "s/outer\.left =.*/outer.left =       $NORMAL_MARGIN/" "$CONFIG"
     sed -i '' "s/outer\.right =.*/outer.right =      $NORMAL_MARGIN/" "$CONFIG"
+
+    # Restore sketchybar and the original outer.top gap value
+    if [[ "$HIDE_SKETCHYBAR" == "true" ]]; then
+        sketchybar --bar display=all
+        if [[ -f "$TOP_GAP_STATE" ]]; then
+            SAVED_TOP=$(cat "$TOP_GAP_STATE")
+            rm "$TOP_GAP_STATE"
+            # Use perl for restore — the saved value contains special chars like [{
+            SAVED_TOP="$SAVED_TOP" perl -i -pe 's/^(\s+outer\.top\s*=\s*).+/${1}$ENV{SAVED_TOP}/' "$CONFIG"
+        fi
+    fi
+
     aerospace reload-config
 
     # Restore the original wallpaper on the target monitor.
@@ -166,6 +184,24 @@ APPLESCRIPT
         sed -i '' "s/outer\.left =.*/outer.left =       $ZEN_MARGIN/" "$CONFIG"
         sed -i '' "s/outer\.right =.*/outer.right =      $ZEN_MARGIN/" "$CONFIG"
     fi
+    # Hide sketchybar and adjust outer.top to reclaim the bar's space.
+    # Saves the original outer.top value for restore.
+    if [[ "$HIDE_SKETCHYBAR" == "true" ]]; then
+        # Hide sketchybar on the target monitor only by restricting it to other displays.
+        # NOTE: sketchybar display numbering is reversed from aerospace's, so we use
+        # the target monitor's aerospace ID (which maps to the other display in sketchybar).
+        SKETCHYBAR_DISPLAY=$(aerospace list-monitors | grep "$MONITOR_NAME" | sed 's/ |.*//' | tr -d ' ')
+        if [[ -n "$SKETCHYBAR_DISPLAY" ]]; then
+            sketchybar --bar display="$SKETCHYBAR_DISPLAY"
+        else
+            sketchybar --bar hidden=true
+        fi
+        # Save original outer.top value (match indented config line, not comments)
+        perl -ne 'if (/^\s+outer\.top\s*=\s*(.+)/) { print "$1\n"; exit }' "$CONFIG" > "$TOP_GAP_STATE"
+        # Replace only the indented config line, not comments containing outer.top
+        perl -i -pe 's/^(\s+outer\.top\s*=\s*).+/${1}'"$NORMAL_MARGIN"'/' "$CONFIG"
+    fi
+
     aerospace reload-config
     aerospace layout accordion
 
