@@ -4,6 +4,10 @@
 # Allow the gitignore file itself
 !.gitignore
 
+# Zsh
+!zsh/
+!zsh/**
+
 # Aerospace - window manager config
 !aerospace/
 !aerospace/**
