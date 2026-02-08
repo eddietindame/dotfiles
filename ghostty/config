@@ -52,7 +52,7 @@ window-padding-balance = true
 # # Just for example:
 # resize-overlay-duration = 4s 200ms
 
-theme = Catppuccin Mocha
+# theme = Catppuccin Mocha
 # background-opacity = 0.5
 background-opacity = 0.9
 background-blur = true
