@@ -1,6 +1,6 @@
 git:
   pagers:
-    - pager: delta --dark --paging=never
+    - pager: 'delta --dark --paging=never --zero-style="syntax #000000" --minus-style="syntax #330011" --minus-emph-style="syntax bold #660022" --plus-style="syntax #002200" --plus-emph-style="syntax bold #004400" --hunk-header-style="syntax bold #000000" --file-style="bold yellow #000000"'
     # - pager: diff-so-fancy
     # - pager: ydiff -p cat -s --wrap --width={{columnWidth}}
       # colorArg: never

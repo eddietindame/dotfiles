@@ -1,0 +1,69 @@
+# Usage:
+#   tmuxinator start dev branch-name
+#   tmuxinator start dev branch-name docker-instance
+#   tmuxinator start dev fe-branch be-branch
+#   tmuxinator start dev fe-branch be-branch docker-instance
+#
+# Examples:
+#   tmuxinator start dev feat/my-feature           # both repos, docker=1
+#   tmuxinator start dev feat/my-feature 2         # both repos, docker=2
+#   tmuxinator start dev bdesk-payment-match bb-bdx     # separate branches, docker=1
+#   tmuxinator start dev bdesk-payment-match bb-bdx 2   # separate branches, docker=2
+
+<% frontend_branch = @args[0] %>
+<% arg1_is_number = @args[1] && @args[1].match?(/^\d+$/) %>
+<% backend_branch = arg1_is_number ? @args[0] : (@args[1] || @args[0]) %>
+<% docker_instance = (arg1_is_number ? @args[1] : (@args[2] || 1)).to_i %>
+<% postgres_port = 5432 + docker_instance %>
+<% frontend_root = "~/Documents/bertie/bertie-desktop/#{frontend_branch}" %>
+<% backend_root = "~/Documents/bertie/bertie-backend/#{backend_branch}" %>
+<% auth_root = "~/Documents/bertie/bertie-auth/ba-stg" %>
+<% frontend_main = "~/Documents/bertie/bertie-desktop/bdesk" %>
+<% backend_main = "~/Documents/bertie/bertie-backend/bb-master" %>
+
+name: <%= @args[0] %>
+
+on_project_start:
+  - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= frontend_main %>" "<%= frontend_root %>" "<%= frontend_branch %>"
+  - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= backend_main %>" "<%= backend_root %>" "<%= backend_branch %>"
+
+windows:
+  - bbs:
+      root: <%= backend_root %>
+      layout: tiled
+      panes:
+        - POSTGRES_PORT=<%= postgres_port %> docker-compose -p bertie-<%= docker_instance %> up
+        - cd <%= auth_root %> && docker-compose up
+        - npm i && POSTGRES_PORT=<%= postgres_port %> npm run db:setup
+        - cd <%= auth_root %> && npm i
+
+  - bb:
+      root: <%= backend_root %>
+      layout: even-horizontal
+      panes:
+        - nvim
+        - claude
+
+  - bd:
+      root: <%= frontend_root %>
+      layout: even-horizontal
+      panes:
+        - nvim
+        - claude
+
+  - bds:
+      root: <%= frontend_root %>
+      panes:
+        - npm i
+        - sqlit
+
+  # - sqlbd:
+  #     root: <%= frontend_root %>
+  #     panes:
+  #       -
+
+  - sqlbb:
+      root: <%= backend_root %>
+      panes:
+        - sleep 5 && sqlitbb <%= postgres_port %>
+

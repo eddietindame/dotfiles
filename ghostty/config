@@ -26,8 +26,11 @@
 # # The config file consists of simple key-value pairs,
 # # separated by equals signs.
 font-family = "FiraCode Nerd Font"
-window-padding-x = 6
-window-padding-y = 6
+# window-padding-x = 6
+# window-padding-y = 6
+# window-padding-y = 6,1
+window-padding-balance = true
+
 #
 # # Spacing around the equals sign does not matter.
 # # All of these are identical:
@@ -50,11 +53,32 @@ window-padding-y = 6
 # resize-overlay-duration = 4s 200ms
 
 theme = Catppuccin Mocha
-background-opacity = 0.5
-# background-opacity = 0.9
+# background-opacity = 0.5
+background-opacity = 0.9
 background-blur = true
 # window-decoration = none
 macos-titlebar-style = hidden
 window-save-state = always
 cursor-style = block
-keybind = global:cmd+shift+t=toggle_quick_terminal
+keybind = global:alt+shift+t=toggle_quick_terminal
+# keybind = cmd+y=new_window:yazi
+keybind = global:cmd+y=new_window
+# keybind = global:cmd+y=new_window:"yazi"
+keybind = cmd+shift+p=toggle_command_palette
+
+# VSCode-style keybindings for Neovim
+# keybind = cmd+s=text:\x1bs
+# keybind = cmd+p=text:\x1bp
+# keybind = cmd+shift+p=text:\x1bP
+# keybind = cmd+b=text:\x1bb
+# keybind = cmd+j=text:\x1bj
+# keybind = cmd+f=text:\x1bf
+# keybind = cmd+shift+f=text:\x1bF
+# keybind = cmd+w=text:\x1bw
+# keybind = cmd+e=text:\x1be
+# keybind = cmd+shift+o=text:\x1bO
+# keybind = cmd+/=text:\x1b/
+# # keybind = cmd+\\=text:\x1b\\
+# keybind = cmd+shift+[=text:\x1b{
+# keybind = cmd+shift+]=text:\x1b}
+# keybind = cmd+g=text:\x1bg

@@ -48,6 +48,10 @@ tmux/plugins/
 !lazygit/
 !lazygit/**
 
+# Tmuxinator
+!tmuxinator/
+!tmuxinator/**
+
 # Block specific files/patterns even in allowed directories
 **/.DS_Store
 **/cache/
