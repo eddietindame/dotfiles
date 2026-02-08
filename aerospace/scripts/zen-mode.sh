@@ -59,15 +59,34 @@ DIM_WALLPAPER_PATH=$(read_config_str dim-wallpaper-path)
 DIM_WALLPAPER_PATH=${DIM_WALLPAPER_PATH:-#000000}
 HIDE_SKETCHYBAR=$(read_config_str hide-sketchybar)
 HIDE_SKETCHYBAR=${HIDE_SKETCHYBAR:-true}
+
+# Detect number of connected displays via NSScreen
+DISPLAY_COUNT=$(osascript -e 'use framework "AppKit"' -e 'count of (current application'\''s NSScreen'\''s screens())')
+
+# Apply single-display overrides when only one monitor is connected
+if [[ "$DISPLAY_COUNT" -le 1 ]]; then
+    SD_PERCENT=$(read_config single-display-margin-percent)
+    [[ -n "$SD_PERCENT" ]] && ZEN_PERCENT="$SD_PERCENT"
+    SD_DIM=$(read_config_str single-display-dim-wallpaper)
+    [[ -n "$SD_DIM" ]] && DIM_WALLPAPER="$SD_DIM"
+    SD_DIM_PATH=$(read_config_str single-display-dim-wallpaper-path)
+    [[ -n "$SD_DIM_PATH" ]] && DIM_WALLPAPER_PATH="$SD_DIM_PATH"
+    SD_SKETCHYBAR=$(read_config_str single-display-hide-sketchybar)
+    [[ -n "$SD_SKETCHYBAR" ]] && HIDE_SKETCHYBAR="$SD_SKETCHYBAR"
+fi
+
 STATE_FILE="/tmp/aerospace-zen-mode"
+SETTINGS_STATE="/tmp/aerospace-zen-settings"
 WALLPAPER_STATE="/tmp/aerospace-zen-wallpaper"
 TOP_GAP_STATE="/tmp/aerospace-zen-top-gap"
-COLOR_WALLPAPER="/tmp/aerospace-zen-color.png"
-
+LEFT_GAP_STATE="/tmp/aerospace-zen-left-gap"
+RIGHT_GAP_STATE="/tmp/aerospace-zen-right-gap"
 # Generate a small solid-colour PNG from a hex value (e.g. "#1a1a2e").
 # Uses python3 to write a 16x16 RGB PNG with no external dependencies.
+# The filename includes the hex value so macOS doesn't serve a cached image.
 generate_color_png() {
     local hex="${1#\#}"
+    local out="/tmp/aerospace-zen-color-${hex}.png"
     python3 -c "
 import struct, zlib
 r,g,b = int('$hex'[0:2],16), int('$hex'[2:4],16), int('$hex'[4:6],16)
@@ -77,14 +96,14 @@ def chunk(t, d):
     x = t + d
     return struct.pack('>I', len(d)) + x + struct.pack('>I', zlib.crc32(x) & 0xffffffff)
 import sys; sys.stdout.buffer.write(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB',16,16,8,2,0,0,0)) + chunk(b'IDAT', c) + chunk(b'IEND', b''))
-" > "$COLOR_WALLPAPER"
+" > "$out"
+    echo "$out"
 }
 
 # Resolve dim-wallpaper-path: if it starts with #, generate a PNG from the colour
 resolve_dim_wallpaper() {
     if [[ "$DIM_WALLPAPER_PATH" == \#* ]]; then
         generate_color_png "$DIM_WALLPAPER_PATH"
-        echo "$COLOR_WALLPAPER"
     else
         echo "$DIM_WALLPAPER_PATH"
     fi
@@ -92,13 +111,31 @@ resolve_dim_wallpaper() {
 
 if [[ -f "$STATE_FILE" ]]; then
     # --- Zen mode OFF ---
+
+    # Restore the settings that were active when zen mode was toggled ON.
+    # This handles the case where display count changed between on/off (e.g. undocking).
+    if [[ -f "$SETTINGS_STATE" ]]; then
+        # shellcheck disable=SC1090
+        source "$SETTINGS_STATE"
+        rm "$SETTINGS_STATE"
+    fi
+
     rm "$STATE_FILE"
-    sed -i '' "s/outer\.left =.*/outer.left =       $NORMAL_MARGIN/" "$CONFIG"
-    sed -i '' "s/outer\.right =.*/outer.right =      $NORMAL_MARGIN/" "$CONFIG"
+    # Restore original outer.left/right values (may contain per-monitor syntax)
+    if [[ -f "$LEFT_GAP_STATE" && -f "$RIGHT_GAP_STATE" ]]; then
+        SAVED_LEFT=$(cat "$LEFT_GAP_STATE")
+        SAVED_RIGHT=$(cat "$RIGHT_GAP_STATE")
+        rm "$LEFT_GAP_STATE" "$RIGHT_GAP_STATE"
+        SAVED_LEFT="$SAVED_LEFT" perl -i -pe 's/^(\s+outer\.left\s*=\s*).+/${1}$ENV{SAVED_LEFT}/' "$CONFIG"
+        SAVED_RIGHT="$SAVED_RIGHT" perl -i -pe 's/^(\s+outer\.right\s*=\s*).+/${1}$ENV{SAVED_RIGHT}/' "$CONFIG"
+    else
+        sed -i '' "s/outer\.left =.*/outer.left =       $NORMAL_MARGIN/" "$CONFIG"
+        sed -i '' "s/outer\.right =.*/outer.right =      $NORMAL_MARGIN/" "$CONFIG"
+    fi
 
     # Restore sketchybar and the original outer.top gap value
     if [[ "$HIDE_SKETCHYBAR" == "true" ]]; then
-        sketchybar --bar display=all
+        sketchybar --bar hidden=false display=all
         if [[ -f "$TOP_GAP_STATE" ]]; then
             SAVED_TOP=$(cat "$TOP_GAP_STATE")
             rm "$TOP_GAP_STATE"
@@ -173,7 +210,26 @@ APPLESCRIPT
     WIDTH="${RESULT##*:}"
     ZEN_MARGIN=$(( WIDTH * ZEN_PERCENT / 100 ))
 
+    # Resolve the System Events display name for wallpaper operations.
+    # NSScreen and System Events use different names for the built-in display
+    # (e.g. "Built-in Retina Display" vs "Colour LCD"), so we can't reuse
+    # MONITOR_NAME directly. On single display we just use the only desktop.
+    if [[ "$DISPLAY_COUNT" -le 1 ]]; then
+        SE_DISPLAY_NAME=$(osascript -e 'tell application "System Events" to return display name of first desktop')
+    else
+        SE_DISPLAY_NAME="$MONITOR_NAME"
+    fi
+
     touch "$STATE_FILE"
+    # Persist the active settings so toggle OFF uses the correct values,
+    # even if the display count changes between on and off (e.g. undocking).
+    cat > "$SETTINGS_STATE" <<SETTINGS
+HIDE_SKETCHYBAR=$HIDE_SKETCHYBAR
+DIM_WALLPAPER=$DIM_WALLPAPER
+SETTINGS
+    # Save original outer.left/right values before modifying
+    perl -ne 'if (/^\s+outer\.left\s*=\s*(.+)/) { print "$1\n"; exit }' "$CONFIG" > "$LEFT_GAP_STATE"
+    perl -ne 'if (/^\s+outer\.right\s*=\s*(.+)/) { print "$1\n"; exit }' "$CONFIG" > "$RIGHT_GAP_STATE"
     if [[ -n "$MONITOR_NAME" ]]; then
         # Use per-monitor gap syntax so only the target monitor is affected.
         # Other monitors (e.g. laptop) keep the normal margin.
@@ -187,14 +243,19 @@ APPLESCRIPT
     # Hide sketchybar and adjust outer.top to reclaim the bar's space.
     # Saves the original outer.top value for restore.
     if [[ "$HIDE_SKETCHYBAR" == "true" ]]; then
-        # Hide sketchybar on the target monitor only by restricting it to other displays.
-        # NOTE: sketchybar display numbering is reversed from aerospace's, so we use
-        # the target monitor's aerospace ID (which maps to the other display in sketchybar).
-        SKETCHYBAR_DISPLAY=$(aerospace list-monitors | grep "$MONITOR_NAME" | sed 's/ |.*//' | tr -d ' ')
-        if [[ -n "$SKETCHYBAR_DISPLAY" ]]; then
-            sketchybar --bar display="$SKETCHYBAR_DISPLAY"
-        else
+        if [[ "$DISPLAY_COUNT" -le 1 ]]; then
+            # Single display — hide sketchybar entirely
             sketchybar --bar hidden=true
+        else
+            # Multi-display — restrict sketchybar to the other display.
+            # NOTE: sketchybar display numbering is reversed from aerospace's, so we use
+            # the target monitor's aerospace ID (which maps to the other display in sketchybar).
+            SKETCHYBAR_DISPLAY=$(aerospace list-monitors | grep "$MONITOR_NAME" | sed 's/ |.*//' | tr -d ' ')
+            if [[ -n "$SKETCHYBAR_DISPLAY" ]]; then
+                sketchybar --bar display="$SKETCHYBAR_DISPLAY"
+            else
+                sketchybar --bar hidden=true
+            fi
         fi
         # Save original outer.top value (match indented config line, not comments)
         perl -ne 'if (/^\s+outer\.top\s*=\s*(.+)/) { print "$1\n"; exit }' "$CONFIG" > "$TOP_GAP_STATE"
@@ -214,9 +275,9 @@ APPLESCRIPT
         osascript <<APPLESCRIPT
 tell application "System Events"
     repeat with d in every desktop
-        if display name of d is "$MONITOR_NAME" then
+        if display name of d is "$SE_DISPLAY_NAME" then
             set currentPic to picture of d
-            do shell script "echo '$MONITOR_NAME':" & quoted form of currentPic & " > $WALLPAPER_STATE"
+            do shell script "echo '$SE_DISPLAY_NAME':" & quoted form of currentPic & " > $WALLPAPER_STATE"
             set picture of d to "$RESOLVED_WALLPAPER"
         end if
     end repeat
