@@ -12,7 +12,7 @@ theme=$(grep "^local theme" "$LUALINE_CONFIG" | sed "s/.*['\"]\\(.*\\)['\"].*/\\
 colors=$(LUALINE_THEME="$theme" nvim -l "$EXTRACT_SCRIPT" 2>/dev/null)
 
 if [ -n "$colors" ]; then
-  IFS=$'\t' read -r bg bg1 bg3 fg accent grey prefix_accent <<< "$colors"
+  IFS=$'\t' read -r bg bg1 bg3 fg accent grey prefix_accent session_accent <<< "$colors"
 fi
 
 # Fallback to terminal defaults (matches lualine default/auto)
@@ -23,10 +23,11 @@ fi
 : "${accent:=green}"
 : "${grey:=colour245}"
 : "${prefix_accent:=yellow}"
+: "${session_accent:=blue}"
 
-# Session item swaps accent color when prefix is active (no commas inside #[] to avoid #{?} parsing issues)
+# Session item uses command-mode color, swaps to visual-mode on prefix
 tmux set -g status-style "bg=default"
-tmux set -g status-left "#{?client_prefix,#[fg=$bg]#[bg=$prefix_accent]#[bold] #S #[bg=default] ,#[fg=$bg]#[bg=$accent]#[bold] #S #[bg=default] }"
+tmux set -g status-left "#{?client_prefix,#[fg=$bg]#[bg=$prefix_accent]#[bold] #S #[bg=default] ,#[fg=$bg]#[bg=$session_accent]#[bold] #S #[bg=default] }"
 tmux set -g status-right "#[fg=$fg,bg=$bg1] #{b:pane_current_path} "
 tmux set -g window-status-format "#[fg=$grey,bg=$bg1] #I #W #[bg=default]"
 tmux set -g window-status-current-format "#[fg=$bg,bg=$accent,bold] #I #W#{?window_zoomed_flag, 󰁌,} #[bg=default]"

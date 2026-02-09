@@ -47,7 +47,7 @@ if not t and theme_name ~= '' then
   if not ok then t = nil end
 end
 
--- Extract colors: bg  bg1  bg3  fg  accent  grey  prefix_accent
+-- Extract colors: bg  bg1  bg3  fg  accent  grey  prefix_accent  session_accent
 if t and t.normal then
   local a = t.normal.a or {}
   local b = t.normal.b or {}
@@ -56,7 +56,10 @@ if t and t.normal then
   local prefix_bg = t.visual and t.visual.a and t.visual.a.bg
     or t.command and t.command.a and t.command.a.bg
     or ''
+  local session_bg = t.command and t.command.a and t.command.a.bg
+    or t.insert and t.insert.a and t.insert.a.bg
+    or ''
 
-  io.write(string.format('%s\t%s\t%s\t%s\t%s\t%s\t%s',
-    a.fg or '', c.bg or '', b.bg or '', c.fg or '', a.bg or '', inactive_fg, prefix_bg))
+  io.write(string.format('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s',
+    a.fg or '', c.bg or '', b.bg or '', c.fg or '', a.bg or '', inactive_fg, prefix_bg, session_bg))
 end
