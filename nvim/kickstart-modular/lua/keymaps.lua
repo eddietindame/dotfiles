@@ -132,6 +132,8 @@ vim.keymap.set('n', '<leader>by', function()
   vim.notify('Paste YAML, then <leader>f to format', vim.log.levels.INFO)
 end, { desc = '[B]uffer scratch [Y]AML' })
 
+vim.keymap.set('n', '<leader>bd', '<cmd>bdelete<CR>', { desc = '[B]uffer [D]elete' })
+
 vim.keymap.set('n', '<leader><Tab>', '<C-^>', { desc = 'Switch to previous buffer' })
 
 -- Indent with Tab in visual mode

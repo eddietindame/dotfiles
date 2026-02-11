@@ -55,11 +55,34 @@ return {
         -- You can put your default mappings / updates / etc. in here
         --  All the info you're looking for is in `:help telescope.setup()`
         --
-        -- defaults = {
-        --   mappings = {
-        --     i = { ['<c-enter>'] = 'to_fuzzy_refine' },
-        --   },
-        -- },
+        defaults = {
+          mappings = {
+            i = {
+              ['<C-f>'] = 'to_fuzzy_refine',
+              ['<C-h>'] = 'results_scrolling_left',
+              ['<C-l>'] = 'results_scrolling_right',
+              ['<C-Left>'] = 'results_scrolling_left',
+              ['<C-Right>'] = 'results_scrolling_right',
+              ['<C-k>'] = 'cycle_history_prev',
+              ['<C-j>'] = 'cycle_history_next',
+              ['<C-v>'] = function(prompt_bufnr)
+                local action_state = require 'telescope.actions.state'
+                local current = action_state.get_current_picker(prompt_bufnr):_get_prompt()
+                local clip = vim.fn.getreg('+'):gsub('\n', ' ')
+                action_state.get_current_picker(prompt_bufnr):set_prompt(current .. clip)
+              end,
+              ['<M-BS>'] = function()
+                vim.api.nvim_input '<C-w>'
+              end,
+            },
+            n = {
+              ['<C-h>'] = 'results_scrolling_left',
+              ['<C-l>'] = 'results_scrolling_right',
+              ['<C-Left>'] = 'results_scrolling_left',
+              ['<C-Right>'] = 'results_scrolling_right',
+            },
+          },
+        },
         -- pickers = {}
         extensions = {
           ['ui-select'] = {
@@ -123,6 +146,26 @@ return {
           search_dirs = staged_files,
         }
       end, { desc = '[S]earch [S]taged files' })
+
+      -- Search unsaved modified buffers
+      vim.keymap.set('n', '<leader>sm', function()
+        local modified = vim.tbl_filter(function(buf)
+          return vim.api.nvim_buf_is_loaded(buf)
+            and vim.bo[buf].modified
+            and vim.bo[buf].buflisted
+        end, vim.api.nvim_list_bufs())
+        if #modified == 0 then
+          vim.notify('No unsaved buffers', vim.log.levels.INFO)
+          return
+        end
+        builtin.buffers {
+          prompt_title = 'Unsaved Buffers',
+          bufnr_width = 0,
+          filter = function(buf)
+            return vim.bo[buf].modified
+          end,
+        }
+      end, { desc = '[S]earch [M]odified buffers' })
     end,
   },
 }
