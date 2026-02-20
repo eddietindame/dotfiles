@@ -51,6 +51,16 @@ return {
 
       -- [[ Configure Telescope ]]
       -- See `:help telescope` and `:help telescope.setup()`
+      local actions = require 'telescope.actions'
+      local action_state = require 'telescope.actions.state'
+
+      local paste_clipboard = function(prompt_bufnr)
+        local picker = action_state.get_current_picker(prompt_bufnr)
+        local current = picker:_get_prompt()
+        local clip = vim.fn.getreg('+'):gsub('\n', ' ')
+        picker:set_prompt(current .. clip)
+      end
+
       require('telescope').setup {
         -- You can put your default mappings / updates / etc. in here
         --  All the info you're looking for is in `:help telescope.setup()`
@@ -65,12 +75,7 @@ return {
               ['<C-Right>'] = 'results_scrolling_right',
               ['<C-k>'] = 'cycle_history_prev',
               ['<C-j>'] = 'cycle_history_next',
-              ['<C-v>'] = function(prompt_bufnr)
-                local action_state = require 'telescope.actions.state'
-                local current = action_state.get_current_picker(prompt_bufnr):_get_prompt()
-                local clip = vim.fn.getreg('+'):gsub('\n', ' ')
-                action_state.get_current_picker(prompt_bufnr):set_prompt(current .. clip)
-              end,
+              ['<C-v>'] = paste_clipboard,
               ['<M-BS>'] = function()
                 vim.api.nvim_input '<C-w>'
               end,

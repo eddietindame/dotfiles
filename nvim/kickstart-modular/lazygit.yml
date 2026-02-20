@@ -1,0 +1,18 @@
+git:
+  pagers:
+    - pager: delta --paging=never
+gui:
+  screenMode: "half"
+  # theme:
+  # activeBorderColor:
+  #   - white
+  #   - bold
+  # inactiveBorderColor:
+  #   - white
+  # selectedLineBgColor:
+  #   - "#333333"
+  # defaultFgColor:
+  #   - white
+  # defaultBgColor:
+  #   - default
+  nerdFontsVersion: "3"

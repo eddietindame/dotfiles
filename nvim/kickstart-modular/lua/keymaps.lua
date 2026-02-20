@@ -134,6 +134,9 @@ end, { desc = '[B]uffer scratch [Y]AML' })
 
 vim.keymap.set('n', '<leader>bd', '<cmd>bdelete<CR>', { desc = '[B]uffer [D]elete' })
 
+vim.keymap.set('n', '<leader>[', '<cmd>tabprevious<CR>', { desc = 'Previous tab' })
+vim.keymap.set('n', '<leader>]', '<cmd>tabnext<CR>', { desc = 'Next tab' })
+
 vim.keymap.set('n', '<leader><Tab>', '<C-^>', { desc = 'Switch to previous buffer' })
 
 -- Indent with Tab in visual mode
