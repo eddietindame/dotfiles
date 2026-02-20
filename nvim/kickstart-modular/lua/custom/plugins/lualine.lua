@@ -9,9 +9,11 @@ local reset_cmdline_on_enter = true
 
 local spec = require('custom.lualine.' .. theme)
 
+spec.opts = spec.opts or {}
+spec.opts.options = spec.opts.options or {}
+spec.opts.options.globalstatus = true
+
 if separators ~= nil then
-  spec.opts = spec.opts or {}
-  spec.opts.options = spec.opts.options or {}
   local seps = separators or { left = '', right = '' }
   spec.opts.options.section_separators = seps
   spec.opts.options.component_separators = seps

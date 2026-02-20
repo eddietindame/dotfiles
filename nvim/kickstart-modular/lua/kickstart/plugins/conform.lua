@@ -2,7 +2,7 @@ return {
   { -- Autoformat
     'stevearc/conform.nvim',
     event = { 'BufWritePre' },
-    cmd = { 'ConformInfo', 'Format' },
+    cmd = { 'ConformInfo' },
     init = function()
       vim.api.nvim_create_user_command('Format', function()
         require('conform').format { timeout_ms = 10000, lsp_format = 'fallback' }
@@ -29,11 +29,23 @@ return {
           return nil
         else
           return {
-            timeout_ms = 500,
+            timeout_ms = 3000,
             lsp_format = 'fallback',
           }
         end
       end,
+      formatters = {
+        prettier = {
+          cwd = function(self, ctx)
+            return require('conform.util').root_file({
+              'prettier.config.mjs',
+              'prettier.config.js',
+              '.prettierrc',
+              '.prettierrc.json',
+            })(self, ctx)
+          end,
+        },
+      },
       formatters_by_ft = {
         lua = { 'stylua' },
         go = { 'goimports', 'gofmt' },

@@ -1,0 +1,14 @@
+gui:
+  theme:
+    # activeBorderColor:
+    #   - white
+    #   - bold
+    # inactiveBorderColor:
+    #   - white
+    # selectedLineBgColor:
+    #   - "#333333"
+    # defaultFgColor:
+    #   - white
+    # defaultBgColor:
+    #   - default
+  nerdFontsVersion: "3"
