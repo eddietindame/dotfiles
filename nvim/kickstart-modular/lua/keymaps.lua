@@ -67,6 +67,11 @@ vim.keymap.set('c', '<M-Right>', '<S-Right>', { desc = 'Move forward one word' }
 vim.keymap.set('c', '<Esc>b', '<S-Left>', { desc = 'Move back one word' })
 vim.keymap.set('c', '<Esc>f', '<S-Right>', { desc = 'Move forward one word' })
 
+-- Option+Backspace to delete word (macOS-style)
+vim.keymap.set('n', '<M-BS>', 'db', { desc = 'Delete word before cursor' })
+vim.keymap.set('i', '<M-BS>', '<C-w>', { desc = 'Delete word before cursor' })
+vim.keymap.set('c', '<M-BS>', '<C-w>', { desc = 'Delete word before cursor' })
+
 -- Option+Up/Down to move lines (VSCode-style)
 vim.keymap.set('n', '<M-Up>', '<cmd>m .-2<CR>==', { desc = 'Move line up' })
 vim.keymap.set('n', '<M-Down>', '<cmd>m .+1<CR>==', { desc = 'Move line down' })
