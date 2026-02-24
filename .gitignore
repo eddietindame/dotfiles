@@ -40,6 +40,10 @@ tmux/plugins/
 !glow/
 !glow/**
 
+# Claude Code
+!claude/
+!claude/statusline.sh
+
 # Lazygit
 !lazygit/
 !lazygit/**
