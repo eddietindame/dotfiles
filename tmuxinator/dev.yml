@@ -1,41 +1,79 @@
 # Usage:
-#   tmuxinator start dev branch-name
-#   tmuxinator start dev branch-name docker-instance
-#   tmuxinator start dev fe-branch be-branch
-#   tmuxinator start dev fe-branch be-branch docker-instance
+#   tmuxinator start dev <branch> [options]
+#
+# Options:
+#   -be,  --backend <branch>      Backend branch (defaults to frontend branch)
+#   -d,   --docker <n>            Docker instance number (default: 1)
+#   -b,   --base <branch>         Base branch for both repos (default: HEAD)
+#   -bfe, --base-fe <branch>      Base branch for frontend only
+#   -bbe, --base-be <branch>      Base branch for backend only
+#   -r,   --rebase                Rebase existing worktrees onto base branch instead of branching off
 #
 # Examples:
-#   tmuxinator start dev feat/my-feature           # both repos, docker=1
-#   tmuxinator start dev feat/my-feature 2         # both repos, docker=2
-#   tmuxinator start dev bdesk-payment-match bb-bdx     # separate branches, docker=1
-#   tmuxinator start dev bdesk-payment-match bb-bdx 2   # separate branches, docker=2
+#   tmuxinator start dev feat/my-feature                              # both repos, docker=1
+#   tmuxinator start dev feat/my-feature -d 2                         # both repos, docker=2
+#   tmuxinator start dev bdesk-payment-match -be bb-bdx               # separate branches
+#   tmuxinator start dev feat/my-feature -b develop                   # both off develop
+#   tmuxinator start dev feat/my-feature -bfe feat/fe-base -bbe feat/be-base  # separate bases
+#   tmuxinator start dev feat/my-feature -b develop -r                # rebase existing onto develop
 
-<% frontend_branch = @args[0] %>
-<% arg1_is_number = @args[1] && @args[1].match?(/^\d+$/) %>
-<% backend_branch = arg1_is_number ? @args[0] : (@args[1] || @args[0]) %>
-<% docker_instance = (arg1_is_number ? @args[1] : (@args[2] || 1)).to_i %>
-<% postgres_port = 5432 + docker_instance %>
-<% frontend_root = "~/Documents/bertie/bertie-desktop/#{frontend_branch}" %>
-<% backend_root = "~/Documents/bertie/bertie-backend/#{backend_branch}" %>
-<% auth_root = "~/Documents/bertie/bertie-auth/ba-stg" %>
-<% frontend_main = "~/Documents/bertie/bertie-desktop/bdesk" %>
-<% backend_main = "~/Documents/bertie/bertie-backend/bb-master" %>
+<%
+  opts = {}
+  positional = []
+  i = 0
+  while i < @args.length
+    case @args[i]
+    when '--backend', '-be'
+      opts[:backend] = @args[i + 1]; i += 2
+    when '--docker', '-d'
+      opts[:docker] = @args[i + 1]; i += 2
+    when '--base', '-b'
+      opts[:base] = @args[i + 1]; i += 2
+    when '--base-fe', '-bfe'
+      opts[:base_fe] = @args[i + 1]; i += 2
+    when '--base-be', '-bbe'
+      opts[:base_be] = @args[i + 1]; i += 2
+    when '--rebase', '-r'
+      opts[:rebase] = true; i += 1
+    else
+      positional << @args[i]; i += 1
+    end
+  end
 
-name: <%= @args[0] %>
+  frontend_branch = positional[0]
+  backend_branch = opts[:backend] || frontend_branch
+  docker_instance = (opts[:docker] || 1).to_i
+  base_fe = opts[:base_fe] || opts[:base]
+  base_be = opts[:base_be] || opts[:base]
+  rebase = opts[:rebase] ? "1" : ""
+  postgres_port = 5432 + docker_instance
+  backend_port = 3000 + docker_instance
+  frontend_root = "~/Documents/bertie/bertie-desktop/#{frontend_branch.gsub('/', '-')}"
+  backend_root = "~/Documents/bertie/bertie-backend/#{backend_branch.gsub('/', '-')}"
+  packages_root = "~/Documents/bertie/bertie-packages/#{frontend_branch.gsub('/', '-')}"
+  auth_root = "~/Documents/bertie/bertie-auth/ba-stg"
+  frontend_main = "~/Documents/bertie/bertie-desktop/bdesk"
+  backend_main = "~/Documents/bertie/bertie-backend/bb-master"
+  packages_main = "~/Documents/bertie/bertie-packages/bp-main"
+%>
+
+name: <%= frontend_branch %>
 
 on_project_start:
-  - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= frontend_main %>" "<%= frontend_root %>" "<%= frontend_branch %>"
-  - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= backend_main %>" "<%= backend_root %>" "<%= backend_branch %>"
+  - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= frontend_main %>" "<%= frontend_root %>" "<%= frontend_branch %>"<%= base_fe ? " \"#{base_fe}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>
+  - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= backend_main %>" "<%= backend_root %>" "<%= backend_branch %>"<%= base_be ? " \"#{base_be}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>
+  - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= packages_main %>" "<%= packages_root %>" "<%= frontend_branch %>"<%= base_fe ? " \"#{base_fe}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>
+  - mkdir -p "<%= backend_root %>/tmp" && printf 'POSTGRES_PORT=<%= postgres_port %>\nBACKEND_PORT=<%= backend_port %>\nDOCKER_INSTANCE=<%= docker_instance %>\nFRONTEND_ROOT=<%= frontend_root %>\nBACKEND_ROOT=<%= backend_root %>\nPACKAGES_ROOT=<%= packages_root %>\n' > "<%= backend_root %>/tmp/.env"
 
 windows:
   - bbs:
       root: <%= backend_root %>
       layout: tiled
       panes:
-        - POSTGRES_PORT=<%= postgres_port %> docker-compose -p bertie-<%= docker_instance %> up
+        - DOCKER_SUFFIX=<%= docker_instance %> POSTGRES_PORT=<%= postgres_port %> docker-compose up
         - cd <%= auth_root %> && docker-compose up
-        - npm i && POSTGRES_PORT=<%= postgres_port %> npm run db:setup
-        - cd <%= auth_root %> && npm i
+        - npm i && POSTGRES_PORT=<%= postgres_port %> npm run db:setup && POSTGRES_PORT=<%= postgres_port %> npm run dev -- -p <%= backend_port %>
+        - cd <%= auth_root %> && POSTGRES_PORT=5432 npm i && BACKEND_SERVER_URL=http://localhost:<%= backend_port %> npm run dev
 
   - bb:
       root: <%= backend_root %>
@@ -55,7 +93,7 @@ windows:
       root: <%= frontend_root %>
       panes:
         - npm i
-        - sqlit
+        - sqlitbd
 
   # - sqlbd:
   #     root: <%= frontend_root %>
@@ -66,4 +104,11 @@ windows:
       root: <%= backend_root %>
       panes:
         - sleep 5 && sqlitbb <%= postgres_port %>
+
+  - bp:
+      root: <%= packages_root %>
+      layout: even-horizontal
+      panes:
+        - nvim
+        - npm i && claude
 

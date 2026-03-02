@@ -21,12 +21,12 @@ return {
           -- `friendly-snippets` contains a variety of premade snippets.
           --    See the README about individual language/framework/plugin snippets:
           --    https://github.com/rafamadriz/friendly-snippets
-          -- {
-          --   'rafamadriz/friendly-snippets',
-          --   config = function()
-          --     require('luasnip.loaders.from_vscode').lazy_load()
-          --   end,
-          -- },
+          {
+            'rafamadriz/friendly-snippets',
+            config = function()
+              require('luasnip.loaders.from_vscode').lazy_load()
+            end,
+          },
         },
         opts = {},
       },
@@ -61,6 +61,11 @@ return {
         ['<Esc>'] = { 'cancel', 'fallback' },
         ['<C-c>'] = { 'cancel', 'fallback' },
         ['<C-e>'] = { 'cancel', 'fallback' },
+        -- Free up Tab — use <C-l>/<C-h> for snippet navigation instead
+        ['<Tab>'] = { 'fallback' },
+        ['<S-Tab>'] = { 'fallback' },
+        ['<C-l>'] = { 'snippet_forward' },
+        ['<C-h>'] = { 'snippet_backward' },
 
         -- For more advanced Luasnip keymaps (e.g. selecting choice nodes, expansion) see:
         --    https://github.com/L3MON4D3/LuaSnip?tab=readme-ov-file#keymaps

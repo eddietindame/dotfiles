@@ -39,7 +39,7 @@ return {
   lazy = false,
   opts = {
     open_mapping = [[<C-\>]],
-    direction = 'horizontal',
+    direction = 'float',
     size = 15,
     shade_terminals = false,
     float_opts = {
@@ -78,6 +78,34 @@ return {
         open_term(nil, 'float')
       end,
       desc = 'Terminal (float)',
+    },
+    {
+      '<leader>tF',
+      function()
+        local term = require('toggleterm.terminal').get(1)
+        if term and term.window then
+          local win = term.window
+          local config = vim.api.nvim_win_get_config(win)
+          if config.relative ~= '' then
+            -- Toggle between fullscreen and default float size
+            if config.width == vim.o.columns - 2 then
+              -- Restore default
+              term:close()
+              open_term(nil, 'float')
+            else
+              -- Fullscreen
+              config.width = vim.o.columns - 2
+              config.height = vim.o.lines - 2
+              config.row = 0
+              config.col = 0
+              vim.api.nvim_win_set_config(win, config)
+            end
+          end
+        else
+          open_term(nil, 'float')
+        end
+      end,
+      desc = 'Terminal (fullscreen float)',
     },
   },
 }

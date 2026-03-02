@@ -7,11 +7,19 @@ return {
     { '<leader>gF', '<cmd>DiffviewFileHistory<CR>', desc = '[G]it [F]ile history (all)' },
     { '<leader>gq', '<cmd>DiffviewClose<CR>', desc = '[G]it diff [Q]uit' },
   },
-  opts = {
-    view = {
-      merge_tool = {
-        layout = 'diff1_plain',
+  config = function()
+    require('diffview').setup {
+      view = {
+        default = {
+          layout = 'diff2_vertical',
+        },
+        file_history = {
+          layout = 'diff2_vertical',
+        },
+        merge_tool = {
+          layout = 'diff1_plain',
+        },
       },
-    },
-  },
+    }
+  end,
 }
