@@ -43,6 +43,9 @@ tmux/plugins/
 # Claude Code
 !claude/
 !claude/statusline.sh
+!.claude/
+!.claude/skills/
+!.claude/skills/**
 
 # Lazygit
 !lazygit/
@@ -51,6 +54,16 @@ tmux/plugins/
 # Tmuxinator
 !tmuxinator/
 !tmuxinator/**
+
+# README
+!README.md
+
+# QMK firmware
+!qmk/
+!qmk/**
+
+# Charybdis keyboard layouts
+!charybdis*.json
 
 # Block specific files/patterns even in allowed directories
 **/.DS_Store

@@ -64,6 +64,7 @@ on_project_start:
   - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= backend_main %>" "<%= backend_root %>" "<%= backend_branch %>"<%= base_be ? " \"#{base_be}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>
   - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= packages_main %>" "<%= packages_root %>" "<%= frontend_branch %>"<%= base_fe ? " \"#{base_fe}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>
   - mkdir -p "<%= backend_root %>/tmp" && printf 'POSTGRES_PORT=<%= postgres_port %>\nBACKEND_PORT=<%= backend_port %>\nDOCKER_INSTANCE=<%= docker_instance %>\nFRONTEND_ROOT=<%= frontend_root %>\nBACKEND_ROOT=<%= backend_root %>\nPACKAGES_ROOT=<%= packages_root %>\n' > "<%= backend_root %>/tmp/.env"
+  - for dir in "<%= backend_root %>" "<%= frontend_root %>" "<%= packages_root %>"; do mkdir -p "$dir/tmp" && printf 'frontend=<%= frontend_root %>\nbackend=<%= backend_root %>\npackages=<%= packages_root %>\n' > "$dir/tmp/repos.txt"; done
 
 windows:
   - bbs:
