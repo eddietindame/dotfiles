@@ -31,42 +31,10 @@ return {
       return vim.fn.nr2char(codepoint)
     end
 
-    -- Caco: https://github.com/goolord/alpha-nvim/discussions/16
-    local art = {
-      [[            :h-                                  Nhy`               ]],
-      [[           -mh.                           h.    `Ndho               ]],
-      [[           hmh+                          oNm.   oNdhh               ]],
-      [[          `Nmhd`                        /NNmd  /NNhhd               ]],
-      [[          -NNhhy                      `hMNmmm`+NNdhhh               ]],
-      [[          .NNmhhs              ```....`..-:/./mNdhhh+               ]],
-      [[           mNNdhhh-     `.-::///+++////++//:--.`-/sd`               ]],
-      [[           oNNNdhhdo..://++//++++++/+++//++///++/-.`                ]],
-      [[      y.   `mNNNmhhhdy+/++++//+/////++//+++///++////-` `/oos:       ]],
-      [[ .    Nmy:  :NNNNmhhhhdy+/++/+++///:.....--:////+++///:.`:s+        ]],
-      [[ h-   dNmNmy oNNNNNdhhhhy:/+/+++/-         ---:/+++//++//.`         ]],
-      [[ hd+` -NNNy`./dNNNNNhhhh+-://///    -+oo:`  ::-:+////++///:`        ]],
-      [[ /Nmhs+oss-:++/dNNNmhho:--::///    /mmmmmo  ../-///++///////.       ]],
-      [[  oNNdhhhhhhhs//osso/:---:::///    /yyyyso  ..o+-//////////:/.      ]],
-      [[   /mNNNmdhhhh/://+///::://////     -:::- ..+sy+:////////::/:/.     ]],
-      [[     /hNNNdhhs--:/+++////++/////.      ..-/yhhs-/////////::/::/`    ]],
-      [[       .ooo+/-::::/+///////++++//-/ossyyhhhhs/:///////:::/::::/:    ]],
-      [[       -///:::::::////++///+++/////:/+ooo+/::///////.::://::---+`   ]],
-      [[       /////+//++++/////+////-..//////////::-:::--`.:///:---:::/:   ]],
-      [[       //+++//++++++////+++///::--                 .::::-------::   ]],
-      [[       :/++++///////////++++//////.                -:/:----::../-   ]],
-      [[       -/++++//++///+//////////////               .::::---:::-.+`   ]],
-      [[       `////////////////////////////:.            --::-----...-/    ]],
-      [[        -///://////////////////////::::-..      :-:-:-..-::.`.+`    ]],
-      [[         :/://///:///::://::://::::::/:::::::-:---::-.-....``/- -   ]],
-      [[           ::::://::://::::::::::::::----------..-:....`.../- -+oo/ ]],
-      [[            -/:::-:::::---://:-::-::::----::---.-.......`-/.      ``]],
-      [[           s-`::--:::------:////----:---.-:::...-.....`./:          ]],
-      [[          yMNy.`::-.--::..-dmmhhhs-..-.-.......`.....-/:`           ]],
-      [[         oMNNNh. `-::--...:NNNdhhh/.--.`..``.......:/-              ]],
-      [[        :dy+:`      .-::-..NNNhhd+``..`...````.-::-`                ]],
-      [[                        .-:mNdhh:.......--::::-`                    ]],
-      [[                           yNh/..------..`                          ]],
-    }
+    -- Pick a random art from the pool (lua/custom/alpha-art.lua)
+    local art_pool = require 'custom.alpha-art'
+    math.randomseed(os.time())
+    local art = art_pool[math.random(#art_pool)]
 
     -- Menu items
     local menu = {
@@ -118,13 +86,17 @@ return {
     end
 
     -- Merge art and side panel
-    local art_width = 75
+    local art_display_width = 75
     local gap = 6
     local menu_start_row = math.floor((#art - #side_lines) / 2) + 1
 
     local combined = {}
+    local art_byte_ends = {} -- byte length of art portion per line (for extmark positioning)
     for i, line in ipairs(art) do
-      local padded = line .. string.rep(' ', math.max(0, art_width - #line)) .. string.rep(' ', gap)
+      local display_w = vim.fn.strdisplaywidth(line)
+      local padding = math.max(0, art_display_width - display_w) + gap
+      local padded = line .. string.rep(' ', padding)
+      art_byte_ends[i] = #padded
       local side_idx = i - menu_start_row + 1
       if side_idx >= 1 and side_idx <= #side_lines then
         padded = padded .. side_lines[side_idx]
@@ -206,18 +178,25 @@ return {
       for i, line in ipairs(lines) do
         local row = i - top_padding
         if row >= 1 and row <= #combined then
+          -- Detect centering offset: alpha prepends spaces to center
+          local combined_line = combined[row] or ''
+          local offset = #line - #combined_line
+          if offset < 0 then
+            offset = 0
+          end
+
           -- Art portion
           local art_line = art[row] or ''
           local art_end = #art_line
           if art_end > 0 then
             vim.api.nvim_buf_set_extmark(buf, ns, i - 1, 0, {
-              end_col = math.min(art_end, #line),
+              end_col = math.min(offset + art_end, #line),
               hl_group = 'AlphaArt',
             })
           end
           -- Side panel portion
-          local side_start = art_width + gap
-          if side_start < #line then
+          local side_start = (art_byte_ends[row] or 0) + offset
+          if side_start > 0 and side_start < #line then
             local hl_map = { menu = 'AlphaMenu', footer = 'AlphaFooter', fortune = 'AlphaFortune' }
             local hl = hl_map[side_type[row]]
             if hl then
@@ -255,7 +234,10 @@ return {
         local target_row = menu_start_row + footer_line_idx - 1
         if target_row >= 1 and target_row <= #combined then
           local art_line = art[target_row] or ''
-          combined[target_row] = art_line .. string.rep(' ', math.max(0, art_width - #art_line)) .. string.rep(' ', gap) .. footer_text
+          local display_w = vim.fn.strdisplaywidth(art_line)
+          local padding = math.max(0, art_display_width - display_w) + gap
+          combined[target_row] = art_line .. string.rep(' ', padding) .. footer_text
+          art_byte_ends[target_row] = #art_line + padding
           side_type[target_row] = 'footer'
           header.val = combined
           pcall(vim.cmd.AlphaRedraw)
