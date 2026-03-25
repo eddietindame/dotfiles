@@ -247,15 +247,8 @@ SETTINGS
             # Single display — hide sketchybar entirely
             sketchybar --bar hidden=true
         else
-            # Multi-display — restrict sketchybar to the other display.
-            # NOTE: sketchybar display numbering is reversed from aerospace's, so we use
-            # the target monitor's aerospace ID (which maps to the other display in sketchybar).
-            SKETCHYBAR_DISPLAY=$(aerospace list-monitors | grep "$MONITOR_NAME" | sed 's/ |.*//' | tr -d ' ')
-            if [[ -n "$SKETCHYBAR_DISPLAY" ]]; then
-                sketchybar --bar display="$SKETCHYBAR_DISPLAY"
-            else
-                sketchybar --bar hidden=true
-            fi
+            # Multi-display — show sketchybar only on the main display (laptop).
+            sketchybar --bar display=main
         fi
         # Save original outer.top value (match indented config line, not comments)
         perl -ne 'if (/^\s+outer\.top\s*=\s*(.+)/) { print "$1\n"; exit }' "$CONFIG" > "$TOP_GAP_STATE"
