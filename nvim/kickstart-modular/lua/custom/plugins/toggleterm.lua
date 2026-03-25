@@ -18,20 +18,72 @@ local function apply_term_bg(bufnr, direction)
   end
 end
 
--- Open or switch the single shared terminal instance to a given size/direction
-local function open_term(size, direction)
-  local term = require('toggleterm.terminal').get(1)
+-- Track the current terminal ID
+local current_id = 1
+
+-- Get the highest terminal ID currently in use
+local function max_term_id()
+  local terms = require('toggleterm.terminal').get_all()
+  local max = 0
+  for _, t in ipairs(terms) do
+    if t.id > max then
+      max = t.id
+    end
+  end
+  return max
+end
+
+-- Open or switch a terminal instance to a given size/direction
+local function open_term(size, direction, id)
+  id = id or current_id
+  current_id = id
+  local Terminal = require('toggleterm.terminal')
+  local term = Terminal.get(id)
   if term then
     term:close()
     term.direction = direction
     term:open(size, direction)
   else
-    require('toggleterm').toggle(1, size, nil, direction)
+    require('toggleterm').toggle(id, size, nil, direction)
   end
-  local t = require('toggleterm.terminal').get(1)
+  local t = Terminal.get(id)
   if t and t.bufnr then
     apply_term_bg(t.bufnr, direction)
   end
+end
+
+local function next_term()
+  local terms = require('toggleterm.terminal').get_all()
+  if #terms == 0 then return end
+  table.sort(terms, function(a, b) return a.id < b.id end)
+  local next_id = terms[1].id
+  for _, t in ipairs(terms) do
+    if t.id > current_id then
+      next_id = t.id
+      break
+    end
+  end
+  local prev = require('toggleterm.terminal').get(current_id)
+  local direction = (prev and prev.direction) or 'float'
+  if prev then prev:close() end
+  open_term(nil, direction, next_id)
+end
+
+local function prev_term()
+  local terms = require('toggleterm.terminal').get_all()
+  if #terms == 0 then return end
+  table.sort(terms, function(a, b) return a.id < b.id end)
+  local prev_id = terms[#terms].id
+  for i = #terms, 1, -1 do
+    if terms[i].id < current_id then
+      prev_id = terms[i].id
+      break
+    end
+  end
+  local prev = require('toggleterm.terminal').get(current_id)
+  local direction = (prev and prev.direction) or 'float'
+  if prev then prev:close() end
+  open_term(nil, direction, prev_id)
 end
 
 return {
@@ -106,6 +158,28 @@ return {
         end
       end,
       desc = 'Terminal (fullscreen float)',
+    },
+    {
+      '<leader>tn',
+      function()
+        local id = max_term_id() + 1
+        open_term(nil, 'float', id)
+      end,
+      desc = '[T]erminal [N]ew',
+    },
+    { '<leader>t]', next_term, desc = '[T]erminal next' },
+    { '<leader>t[', prev_term, desc = '[T]erminal previous' },
+    -- Terminal-mode bindings (work while inside the terminal)
+    { '<C-S-l>', next_term, mode = 't', desc = 'Next terminal' },
+    { '<C-S-h>', prev_term, mode = 't', desc = 'Previous terminal' },
+    {
+      '<C-n>',
+      function()
+        local id = max_term_id() + 1
+        open_term(nil, 'float', id)
+      end,
+      mode = 't',
+      desc = 'New terminal',
     },
   },
 }

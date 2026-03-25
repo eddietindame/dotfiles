@@ -1,6 +1,12 @@
 -- [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
 
+-- Move by display lines (wrapped lines) instead of actual lines
+vim.keymap.set({ 'n', 'v' }, 'j', 'gj', { desc = 'Down (display line)' })
+vim.keymap.set({ 'n', 'v' }, 'k', 'gk', { desc = 'Up (display line)' })
+vim.keymap.set({ 'n', 'v', 'i' }, '<Down>', '<cmd>normal! gj<CR>', { desc = 'Down (display line)' })
+vim.keymap.set({ 'n', 'v', 'i' }, '<Up>', '<cmd>normal! gk<CR>', { desc = 'Up (display line)' })
+
 -- Clear highlights on search when pressing <Esc> in normal mode
 --  See `:help hlsearch`
 vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
@@ -8,6 +14,16 @@ vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 -- Diagnostic keymaps
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float, { desc = 'Show diagnostic [E]rror message' })
+vim.keymap.set('n', '<leader>ey', function()
+  local diagnostics = vim.diagnostic.get(0, { lnum = vim.api.nvim_win_get_cursor(0)[1] - 1 })
+  if #diagnostics == 0 then
+    vim.notify('No diagnostics on this line', vim.log.levels.WARN)
+    return
+  end
+  local msg = diagnostics[1].message
+  vim.fn.setreg('+', msg)
+  vim.notify(msg, vim.log.levels.INFO, { title = 'Yanked diagnostic' })
+end, { desc = 'Yank diagnostic [E]rror message' })
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
