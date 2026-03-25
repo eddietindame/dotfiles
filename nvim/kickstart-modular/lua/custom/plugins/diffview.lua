@@ -9,6 +9,14 @@ return {
   },
   config = function()
     require('diffview').setup {
+      file_panel = {
+        listing_style = 'list',
+      },
+      keymaps = {
+        view = { { 'n', 'q', '<cmd>DiffviewClose<CR>', { desc = 'Close diffview' } } },
+        file_panel = { { 'n', 'q', '<cmd>DiffviewClose<CR>', { desc = 'Close diffview' } } },
+        file_history_panel = { { 'n', 'q', '<cmd>DiffviewClose<CR>', { desc = 'Close diffview' } } },
+      },
       view = {
         default = {
           layout = 'diff2_vertical',
