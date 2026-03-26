@@ -45,6 +45,9 @@ return {
             })(self, ctx)
           end,
         },
+        shfmt = {
+          prepend_args = { '-i', '2' },
+        },
       },
       formatters_by_ft = {
         lua = { 'stylua' },
@@ -56,6 +59,8 @@ return {
         json = { 'prettier' },
         yaml = { 'prettier' },
         markdown = { 'markdownlint-cli2', 'prettier' },
+        sh = { 'shfmt' },
+        zsh = { 'shfmt' },
         -- Conform can also run multiple formatters sequentially
         -- python = { "isort", "black" },
         --
