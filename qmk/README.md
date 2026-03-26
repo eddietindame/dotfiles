@@ -2,47 +2,48 @@
 
 Custom firmware for Charybdis 4x6 (Splinktegrated/RP2040).
 
-Source files are copies from:
-```
-~/qmk_firmware/keyboards/bastardkb/charybdis/4x6/keymaps/eddie/
-```
-
-### Compile
+### Usage
 
 ```bash
-cd ~/.config/qmk && make
+cd ~/.config/qmk
+make profiles        # list profiles
+make use P=name      # switch profile and compile
+make save P=name     # save current QMK tree config as profile
+make active          # show active profile
+make flash           # compile and print flash instructions
 ```
 
 ### Flash
 
-```bash
-cd ~/.config/qmk && make flash
-```
-
 Enter bootloader (QK_BOOT key on Media layer, or double-tap hardware reset), then drag `.uf2` to the drive that appears.
 
-### Firmware Mods
+### Profiles
 
-#### `config.h`
+Firmware configs live in `profiles/<name>/`, each with `config.h` and optionally `keymap.c`. The active profile is compiled into the QMK tree at `~/qmk_firmware/keyboards/bastardkb/charybdis/4x6/keymaps/eddie/`.
+
+#### `permissive-hold` (active)
+
+| Define | Value | Description |
+|--------|-------|-------------|
+| `DYNAMIC_KEYMAP_LAYER_COUNT` | `7` | Enables 7 layers for VIA (default is 4) |
+| `TAPPING_TERM` | `175` | ms window to decide tap vs hold for dual-function keys |
+| `PERMISSIVE_HOLD` | — | Registers hold when another key is pressed and released within tapping term |
+
+#### `hold-on-other`
 
 | Define | Value | Description |
 |--------|-------|-------------|
 | `DYNAMIC_KEYMAP_LAYER_COUNT` | `7` | Enables 7 layers for VIA (default is 4) |
 | `TAPPING_TERM` | `200` | ms window to decide tap vs hold for dual-function keys |
-| `PERMISSIVE_HOLD` | — | Registers hold when another key is pressed and released within tapping term. Helps home row mods trigger reliably during fast combos. |
-| `HOLD_ON_OTHER_KEY_PRESS_PER_KEY` | — | Enables per-key override of `HOLD_ON_OTHER_KEY_PRESS` via callback function in `keymap.c` |
+| `PERMISSIVE_HOLD` | — | Registers hold when another key is pressed and released within tapping term |
+| `HOLD_ON_OTHER_KEY_PRESS` | — | Registers hold instantly when any other key is pressed down |
 
-#### `keymap.c`
-
-| Mod | Description |
-|-----|-------------|
-| `get_hold_on_other_key_press()` | Returns `true` for layer-tap (thumb keys) and mod-tap (home row mods) keys. Makes all dual-function keys register hold instantly when any other key is pressed, without waiting for tapping term. Regular keys are unaffected. |
+Also includes `get_hold_on_other_key_press()` in `keymap.c` returning `true` for LT and MT keys.
 
 ### Files
 
 | File | Description |
 |------|-------------|
-| `config.h` | QMK config overrides |
-| `keymap.c` | Default keymap + per-key hold callback |
+| `Makefile` | Build automation and profile management |
+| `profiles/` | Firmware config profiles (`config.h` + `keymap.c`) |
 | `bastardkb_charybdis_4x6_eddie.uf2` | Compiled firmware |
-| `Makefile` | Build automation (sync, compile, flash) |
