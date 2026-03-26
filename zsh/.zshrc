@@ -3,7 +3,7 @@ export XDG_CONFIG_HOME="$HOME/.config"
 
 # Path
 export PATH="$HOME/bin:$PATH"
-GOPATH=$HOME/go  PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
+GOPATH=$HOME/go PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 
 # The next line updates PATH for the Google Cloud SDK.
 if [ -f "$HOME/google-cloud-sdk/path.zsh.inc" ]; then . "$HOME/google-cloud-sdk/path.zsh.inc"; fi
@@ -43,17 +43,19 @@ if [[ -n "$TMUX" ]]; then
     local cur_num=$(fc -l -1 | awk '{print $1}')
     if [[ "$cur_num" -gt "$_last_hist_num" ]]; then
       fc -AI "$HISTFILE"
-      fc -l -1 | sed 's/^[[:space:]]*[0-9]*[[:space:]]*//' >> "$_global_histfile"
+      fc -l -1 | sed 's/^[[:space:]]*[0-9]*[[:space:]]*//' >>"$_global_histfile"
       _last_hist_num=$cur_num
     fi
   }
   # Toggle between session and global history
   toggle-history() {
     if [[ "$HISTFILE" == "$_session_histfile" ]]; then
-      fc -P; fc -p "$_global_histfile" $HISTSIZE $SAVEHIST
+      fc -P
+      fc -p "$_global_histfile" $HISTSIZE $SAVEHIST
       echo "history: global"
     else
-      fc -P; fc -p "$_session_histfile" $HISTSIZE $SAVEHIST
+      fc -P
+      fc -p "$_session_histfile" $HISTSIZE $SAVEHIST
       echo "history: session"
     fi
   }
@@ -75,7 +77,7 @@ alias ls="eza"
 
 # Log tmuxinator commands
 tms() {
-  echo "$(date '+%Y-%m-%d %H:%M') tmuxinator start $*" >> "$HOME/.tmuxinator_log"
+  echo "$(date '+%Y-%m-%d %H:%M') tmuxinator start $*" >>"$HOME/.tmuxinator_log"
   tmuxinator start "$@"
 }
 
@@ -103,16 +105,37 @@ function nvims() {
   fi
 }
 
+cleanup-worktrees() {
+  if [[ -z "$1" ]]; then
+    echo "Usage: cleanup-worktrees <branch-name>"
+    return 1
+  fi
+
+  local branch="$1"
+
+  for dir in */; do
+    [[ -d "$dir/.git" || -f "$dir/.git" ]] || continue
+    local worktree=$(
+      git -C "$dir" worktree list --porcelain | awk -v b="$branch"
+      '/^worktree /{wt=$2} /^branch /{if ($2 == "refs/heads/"b) print wt}'
+    )
+    if [[ -n "$worktree" ]]; then
+      echo "Removing worktree for '$branch' in $dir -> $worktree"
+      git -C "$dir" worktree remove --force "$worktree"
+    fi
+  done
+}
+
 # Increase memory for eslint
 export NODE_OPTIONS="--max-old-space-size=8192"
 
 # Yazi function to change directory after running yazi
 function y() {
-	local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
-	command yazi "$@" --cwd-file="$tmp"
-	IFS= read -r -d '' cwd < "$tmp"
-	[ "$cwd" != "$PWD" ] && [ -d "$cwd" ] && builtin cd -- "$cwd"
-	rm -f -- "$tmp"
+  local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
+  command yazi "$@" --cwd-file="$tmp"
+  IFS= read -r -d '' cwd <"$tmp"
+  [ "$cwd" != "$PWD" ] && [ -d "$cwd" ] && builtin cd -- "$cwd"
+  rm -f -- "$tmp"
 }
 
 ### Znap setup ###
@@ -122,6 +145,6 @@ mkdir -p "$ZSH_PLUGINS_DIR"
 
 # Download Znap, if it's not there yet.
 [[ -r $ZSH_PLUGINS_DIR/znap/znap.zsh ]] ||
-    git clone --depth 1 -- \
-        https://github.com/marlonrichert/zsh-snap.git $ZSH_PLUGINS_DIR/znap
-source $ZSH_PLUGINS_DIR/znap/znap.zsh  # Start Znap
+  git clone --depth 1 -- \
+    https://github.com/marlonrichert/zsh-snap.git $ZSH_PLUGINS_DIR/znap
+source $ZSH_PLUGINS_DIR/znap/znap.zsh # Start Znap
