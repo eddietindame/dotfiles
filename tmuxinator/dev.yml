@@ -3,7 +3,7 @@
 #
 # Options:
 #   -be,  --backend <branch>      Backend branch (defaults to frontend branch)
-#   -d,   --docker <n>            Docker instance number (default: 1)
+#   -d,   --docker <n>            Docker instance number (auto-detected if omitted)
 #   -b,   --base <branch>         Base branch for both repos (default: HEAD)
 #   -bfe, --base-fe <branch>      Base branch for frontend only
 #   -bbe, --base-be <branch>      Base branch for backend only
@@ -18,6 +18,16 @@
 #   tmuxinator start dev feat/my-feature -b develop -r                # rebase existing onto develop
 
 <%
+  require 'socket'
+
+  port_free = lambda do |port|
+    s = TCPServer.new(port)
+    s.close
+    true
+  rescue Errno::EADDRINUSE, Errno::EACCES
+    false
+  end
+
   opts = {}
   positional = []
   i = 0
@@ -42,15 +52,17 @@
 
   frontend_branch = positional[0]
   backend_branch = opts[:backend] || frontend_branch
-  docker_instance = (opts[:docker] || 1).to_i
+  docker_instance = opts[:docker] ? opts[:docker].to_i : (0..).find { |n| port_free.(5432 + n) && port_free.(3000 + n) }
   base_fe = opts[:base_fe] || opts[:base]
   base_be = opts[:base_be] || opts[:base]
   rebase = opts[:rebase] ? "1" : ""
   postgres_port = 5432 + docker_instance
   backend_port = 3000 + docker_instance
-  frontend_root = "~/Documents/bertie/bertie-desktop/#{frontend_branch.gsub('/', '-')}"
-  backend_root = "~/Documents/bertie/bertie-backend/#{backend_branch.gsub('/', '-')}"
-  packages_root = "~/Documents/bertie/bertie-packages/#{frontend_branch.gsub('/', '-')}"
+  fe_slug = frontend_branch.gsub('/', '-')
+  be_slug = backend_branch.gsub('/', '-')
+  frontend_root = "~/Documents/bertie/bertie-desktop/#{fe_slug}"
+  backend_root = "~/Documents/bertie/bertie-backend/#{be_slug}"
+  packages_root = "~/Documents/bertie/bertie-packages/#{fe_slug}"
   auth_root = "~/Documents/bertie/bertie-auth/ba-stg"
   frontend_main = "~/Documents/bertie/bertie-desktop/bdesk"
   backend_main = "~/Documents/bertie/bertie-backend/bb-master"
@@ -64,16 +76,16 @@ on_project_start:
   - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= backend_main %>" "<%= backend_root %>" "<%= backend_branch %>"<%= base_be ? " \"#{base_be}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>
   - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= packages_main %>" "<%= packages_root %>" "<%= frontend_branch %>"<%= base_fe ? " \"#{base_fe}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>
   - mkdir -p "<%= backend_root %>/tmp" && printf 'POSTGRES_PORT=<%= postgres_port %>\nBACKEND_PORT=<%= backend_port %>\nDOCKER_INSTANCE=<%= docker_instance %>\nFRONTEND_ROOT=<%= frontend_root %>\nBACKEND_ROOT=<%= backend_root %>\nPACKAGES_ROOT=<%= packages_root %>\n' > "<%= backend_root %>/tmp/.env"
-  - for dir in "<%= backend_root %>" "<%= frontend_root %>" "<%= packages_root %>"; do mkdir -p "$dir/tmp" && printf 'frontend=<%= frontend_root %>\nbackend=<%= backend_root %>\npackages=<%= packages_root %>\n' > "$dir/tmp/repos.txt"; done
+  - ~/.config/tmuxinator/scripts/generate-repos-txt.sh "<%= frontend_branch %>" "<%= backend_branch %>"
 
 windows:
   - bbs:
       root: <%= backend_root %>
       layout: tiled
       panes:
-        - DOCKER_SUFFIX=<%= docker_instance %> POSTGRES_PORT=<%= postgres_port %> docker-compose up
+        - DOCKER_SUFFIX=<%= docker_instance %> POSTGRES_PORT=<%= postgres_port %> docker-compose -p bertie-backend-<%= be_slug.downcase %> up
         - cd <%= auth_root %> && docker-compose up
-        - npm i && POSTGRES_PORT=<%= postgres_port %> npm run db:setup && POSTGRES_PORT=<%= postgres_port %> npm run dev -- -p <%= backend_port %>
+        - pnpm i && POSTGRES_PORT=<%= postgres_port %> pnpm db:setup && POSTGRES_PORT=<%= postgres_port %> pnpm dev -p <%= backend_port %>
         - cd <%= auth_root %> && POSTGRES_PORT=5432 npm i && BACKEND_SERVER_URL=http://localhost:<%= backend_port %> npm run dev
 
   - bb:

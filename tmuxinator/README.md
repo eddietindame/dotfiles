@@ -16,7 +16,7 @@ mux start dev <branch> [options]
 |------|------|-------------|
 | (positional) | | Branch name (required). Used for frontend, backend, and packages by default. |
 | `-be` | `--backend` | Backend branch, if different from frontend. |
-| `-d` | `--docker` | Docker instance number (default: 1). Offsets postgres port (5432+n) and backend port (3000+n). |
+| `-d` | `--docker` | Docker instance number. Offsets postgres port (5432+n) and backend port (3000+n). Auto-detected if omitted: loops from 0 and picks the first n where both ports are free. |
 | `-b` | `--base` | Base branch to branch off for both repos. Only applies when creating new worktrees. |
 | `-bfe` | `--base-fe` | Base branch for frontend only. Overrides `-b`. |
 | `-bbe` | `--base-be` | Base branch for backend only. Overrides `-b`. |
@@ -25,13 +25,13 @@ mux start dev <branch> [options]
 ## Examples
 
 ```sh
-# Basic - same branch for all repos, docker instance 1
+# Basic - same branch for all repos, docker instance auto-detected
 tmuxinator start dev feat/my-feature
 
 # Separate backend branch
 tmuxinator start dev feat/fe-branch -be feat/be-branch
 
-# Docker instance 2 (postgres on 5434, backend on 3002)
+# Force docker instance 2 (postgres on 5434, backend on 3002)
 tmuxinator start dev feat/my-feature -d 2
 
 # Branch off a base branch (new worktree only)
@@ -83,11 +83,12 @@ The actual git branch name is preserved (with slashes). The tmux session name al
 
 ### Port offsets
 
-The `-d` flag offsets ports to allow multiple instances to run simultaneously:
+The `-d` flag offsets ports to allow multiple instances to run simultaneously. If omitted, the lowest free instance is auto-detected by attempting a TCP bind on each candidate port pair (starts at 0).
 
 | Instance (`-d`) | Postgres port | Backend port |
 |-----------------|---------------|--------------|
-| 1 (default) | 5433 | 3001 |
+| 0 | 5432 | 3000 |
+| 1 | 5433 | 3001 |
 | 2 | 5434 | 3002 |
 | 3 | 5435 | 3003 |
 | 4 | 5436 | 3004 |
