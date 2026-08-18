@@ -66,6 +66,13 @@ keybind = global:cmd+y=new_window
 # keybind = global:cmd+y=new_window:"yazi"
 keybind = cmd+shift+p=toggle_command_palette
 
+# Install Ghostty's terminfo on remote hosts when ssh'ing. Ghostty ships
+# xterm-ghostty inside its app bundle and points at it with $TERMINFO, but ssh
+# forwards TERM and not TERMINFO — so the remote sees a terminal name it can't
+# look up and backspace/arrow keys break. Full default list repeated here so
+# only ssh-terminfo changes from Ghostty's defaults.
+shell-integration-features = cursor,no-sudo,title,no-ssh-env,ssh-terminfo,path
+
 # VSCode-style keybindings for Neovim
 # keybind = cmd+s=text:\x1bs
 # keybind = cmd+p=text:\x1bp
