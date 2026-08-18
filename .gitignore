@@ -76,6 +76,10 @@ tmuxinator/desktop-host
 # Charybdis keyboard layouts
 !charybdis*.json
 
+# Homebrew - Brewfile only, trust.json is brew state
+!homebrew/
+!homebrew/Brewfile
+
 # Block specific files/patterns even in allowed directories
 **/.DS_Store
 **/cache/
