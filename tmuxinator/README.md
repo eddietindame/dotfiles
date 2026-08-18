@@ -5,10 +5,15 @@ Spins up a full Bertie development environment using git worktrees, with separat
 ## Quick start
 
 ```sh
+scripts/start-dev.sh <branch> [options]   # tmux + a herdr space for the agents
+# or, tmux only
 tmuxinator start dev <branch> [options]
-# or
-mux start dev <branch> [options]
 ```
+
+`start-dev.sh` runs `tmuxinator start dev` exactly as before, then builds a
+[herdr](https://herdr.dev) space holding **only** the agent windows (`bb`, `bd`,
+`bp`), each running claude as a tracked agent, and finally attaches you to tmux.
+Run tmux and herdr in separate Ghostty windows.
 
 ## Options
 
@@ -23,6 +28,26 @@ mux start dev <branch> [options]
 | `-bbe` | `--base-be` | Base branch for backend only. Overrides `-b`. |
 | `-r` | `--rebase` | Rebase existing worktrees onto their base branch instead of creating new ones. Requires `-b`, `-bfe`, or `-bbe`. |
 | `-l` | `--desktop-local` | Run the Electron app over ssh on the machine you're sitting at, instead of here — macOS can't forward a window, so an app started here is only visible here. Needs an ssh target in `~/.config/tmuxinator/desktop-host` (one line, untracked), these dotfiles, and a base clone of `bertie-desktop` on that machine. `scripts/desktop-dev.sh` creates the worktree and installs deps there, honouring `-bfe` and `-r`. |
+| `-l` | `--desktop-local` | Run the Electron app over ssh on the machine you're sitting at, instead of here — macOS can't forward a window, so an app started here is only visible here. Needs an ssh target in `~/.config/tmuxinator/desktop-host` (one line, untracked), plus a checkout with `node_modules` on that machine. |
+| `-c` | `--claude` | Add the claude pane back to the `bb`, `bd`, and `bp` windows. Off by default — claude normally runs in herdr instead. |
+
+### start-dev.sh only
+
+| Flag | Description |
+|------|-------------|
+| `--no-herdr` | Skip the herdr space entirely; behaves like a plain `tmuxinator start`. |
+| `--herdr-only` | Build only the herdr space (worktrees must already exist). Doesn't touch tmux. |
+
+The two halves are independent — `-c` controls tmux's claude panes, `--no-herdr`
+/ `--herdr-only` control the herdr space:
+
+```sh
+scripts/start-dev.sh feat/x                # claude in herdr only (default)
+scripts/start-dev.sh feat/x -c             # claude in both
+scripts/start-dev.sh feat/x -c --no-herdr  # claude in tmux only (original setup)
+scripts/start-dev.sh feat/x --no-herdr     # no claude anywhere
+scripts/start-dev.sh --herdr-only feat/x   # rebuild just the herdr space
+```
 
 ## Examples
 
@@ -78,12 +103,27 @@ tmuxinator start dev feat/fe-branch -be feat/be-branch -d 3 -bfe feat/fe-base -b
 | Window | Repo | Panes |
 |--------|------|-------|
 | `bbs` | backend | Backend docker compose (postgres on the offset port), auth docker compose (postgres on 5432), `pnpm i` + db setup + backend dev server, auth `npm i` + auth dev server |
-| `bb` | backend | nvim, claude |
-| `bd` | frontend | nvim, claude |
+| `bb` | backend | nvim (+ claude with `-c`) |
+| `bd` | frontend | nvim (+ claude with `-c`) |
 | `bds` | frontend | `npm i`, sqlitbd |
 | `sqlbb` | backend | sqlitbb (connects to offset postgres port) |
-| `bp` | packages | nvim, `npm i` + claude |
-| `bw` | web | nvim, claude, `npm i` — only with `-w` |
+| `bp` | packages | nvim, `npm i` (+ `&& claude` with `-c`) |
+| `bw` | web | nvim, `npm i` (+ claude with `-c`) — only with `-w` |
+
+### herdr space (`start-dev.sh`)
+
+One space labelled with the frontend branch, with a tab per agent window:
+
+| Tab | Repo | Agent name |
+|-----|------|------------|
+| `bb` | backend | `bb-<slug>` |
+| `bd` | frontend | `bd-<slug>` |
+| `bp` | packages | `bp-<slug>` |
+
+Agents are started with `herdr agent start --kind claude`, so herdr tracks their
+idle/working/blocked state and `prefix+J` / `prefix+K` cycles between them. If a
+space with that label already exists, the script leaves it alone rather than
+adding a second set of agents.
 
 ### Worktree paths
 
