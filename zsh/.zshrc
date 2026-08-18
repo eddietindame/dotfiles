@@ -22,8 +22,8 @@ if [ -f "$HOME/google-cloud-sdk/path.zsh.inc" ]; then . "$HOME/google-cloud-sdk/
 # The next line enables shell command completion for gcloud.
 if [ -f "$HOME/google-cloud-sdk/completion.zsh.inc" ]; then . "$HOME/google-cloud-sdk/completion.zsh.inc"; fi
 
-# Load local bin env
-. "$HOME/.local/bin/env"
+# Load local bin env (uv/rye installer shim; absent on machines without them)
+[ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
 
 # Starship prompt
 eval "$(starship init zsh)"
@@ -123,6 +123,10 @@ bertie-tunnel() {
   # leaving you wondering why localhost:3001 is the wrong app.
   ssh -N -o ExitOnForwardFailure=yes "${forwards[@]}" mini
 }
+
+# Bertie dev env: tmuxinator for the servers, herdr space for the claude agents.
+# Also symlinked at ~/bin/start-dev; this alias is what survives a fresh clone.
+alias start-dev="$HOME/.config/tmuxinator/scripts/start-dev.sh"
 
 # Always upgrade claude-code
 alias claude="brew upgrade claude-code && claude"
