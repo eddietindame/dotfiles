@@ -1,6 +1,9 @@
 # Set config dir
 export XDG_CONFIG_HOME="$HOME/.config"
 
+# Brewfile lives in the dotfiles repo
+export HOMEBREW_BUNDLE_FILE="$XDG_CONFIG_HOME/homebrew/Brewfile"
+
 # Path
 export PATH="$HOME/bin:$PATH"
 GOPATH=$HOME/go PATH=$PATH:/usr/local/go/bin:$GOPATH/bin

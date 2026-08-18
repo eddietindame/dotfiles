@@ -1,0 +1,28 @@
+tap "felixkratz/formulae", trusted: true
+tap "nikitabobko/tap", trusted: true
+
+brew "git"
+brew "glow"
+brew "lazygit"
+brew "nvim"
+brew "posting"
+brew "tmux"
+brew "tmuxinator"
+brew "sketchybar"
+brew "zoxide"
+brew "eza"
+brew "starship"
+brew "prettier"
+brew "herdr"
+brew "go"
+brew "volta"
+brew "delta"
+
+cask "ghostty"
+cask "claude-code"
+cask "aerospace"
+cask "font-sketchybar-app-font"
+cask "raycast"
+cask "tailscale"
+cask "font-fira-code-nerd-font"
+
