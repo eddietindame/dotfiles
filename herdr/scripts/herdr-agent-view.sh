@@ -8,13 +8,14 @@
 # to the focused space and keeps following it as you switch spaces;
 # agent.view.clear restores the default all-spaces view.
 #
-# The API can't be read back (agent.view state is absent from `api snapshot`,
-# and `agent list` ignores the view), so the current mode is remembered here.
+# The API can't be read back — agent.view state is absent from `api snapshot`
+# and `agent list` ignores the view — so the current mode is inferred from the
+# follower process. It exits when the server closes the connection, which makes
+# "follower alive" mean "view is scoped" even across a server restart.
 
 set -euo pipefail
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
-STATE_FILE="$STATE_DIR/herdr-agent-view"
 PID_FILE="$STATE_DIR/herdr-agent-view.pid"
 SOURCE_ID="herdr-agent-view"
 FOLLOWER="$(cd "$(dirname "$0")" && pwd)/herdr-agent-view-follow.py"
@@ -76,7 +77,6 @@ scope_space() {
     printf '%s\n' "$!" >"$PID_FILE"
     log "follower started (pid $!)"
   fi
-  printf 'space\n' >"$STATE_FILE"
 }
 
 stop_follower() {
@@ -95,7 +95,6 @@ scope_all() {
 {"id":"$SOURCE_ID:clear","method":"agent.view.clear","params":{"source":"$SOURCE_ID"}}
 JSON
   mkdir -p "$STATE_DIR"
-  printf 'all\n' >"$STATE_FILE"
 }
 
 log "invoked: ${1:-toggle}"
@@ -111,7 +110,7 @@ case "${1:-toggle}" in
   space) scope_space "$sock"; log "scoped to current space" ;;
   all)   scope_all "$sock";   log "scoped to all spaces" ;;
   toggle)
-    if [ "$(cat "$STATE_FILE" 2>/dev/null || echo all)" = "space" ]; then
+    if follower_pid >/dev/null; then
       scope_all "$sock"; log "toggled -> all spaces"
     else
       scope_space "$sock"; log "toggled -> current space"
