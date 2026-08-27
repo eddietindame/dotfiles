@@ -1,0 +1,107 @@
+onboarding = false
+
+[theme]
+auto_switch = false
+
+# ~~~ Keybindings: mirror ~/.config/tmux/tmux.reset.conf as closely as herdr allows ~~~
+# Mapping notes: herdr "tab" == tmux window, herdr "workspace" == tmux session.
+name = "gruvbox"
+[keys]
+prefix = "ctrl+space"                    # tmux: set -g prefix ^space
+
+# --- tabs (tmux windows) ---
+new_tab = "prefix+ctrl+n"                # tmux: bind ^N new-window
+rename_tab = "prefix+r"                  # tmux: bind r command-prompt "rename-window %%"
+previous_tab = "prefix+shift+h"          # tmux: bind H previous-window
+next_tab = "prefix+shift+l"              # tmux: bind L next-window
+switch_tab = "prefix+1..9"               # tmux: bind 1..9 select-window -t :N
+close_tab = "prefix+shift+x"
+
+# --- panes ---
+focus_pane_left = "prefix+h"             # tmux: bind h select-pane -L
+focus_pane_down = "prefix+j"             # tmux: bind j select-pane -D
+focus_pane_up = "prefix+k"               # tmux: bind k select-pane -U
+focus_pane_right = "prefix+l"            # tmux: bind l select-pane -R
+last_pane = "prefix+tab"                 # tmux: bind Tab last-window (closest herdr action)
+cycle_pane_next = ""                     # tmux has no pane cycling; use h/j/k/l
+cycle_pane_previous = ""
+split_vertical = "prefix+v"              # tmux: bind v split-window -h (side by side)
+split_horizontal = "prefix+s"            # tmux: bind s split-window -v (stacked)
+close_pane = "prefix+c"                  # tmux: bind c kill-pane
+zoom = "prefix+z"                        # tmux: bind z resize-pane -Z
+resize_mode = "prefix+minus"             # tmux: bind , . - = resize-pane
+rename_pane = "prefix+shift+p"           # tmux: bind P set pane-border-status
+
+# --- agents (no tmux equivalent; shift+j/k pairs with shift+h/l for tabs) ---
+next_agent = "prefix+shift+j"            # next agent row in the sidebar
+previous_agent = "prefix+shift+k"        # previous agent row
+focus_agent = "prefix+alt+1..9"          # jump straight to agent N
+
+# --- workspaces (tmux sessions) ---
+workspace_picker = "prefix+shift+s"      # tmux: bind S choose-session
+goto = "prefix+w"                        # tmux: bind w list-windows
+new_workspace = "prefix+shift+n"
+rename_workspace = "prefix+shift+w"
+close_workspace = "prefix+shift+d"
+new_worktree = "prefix+shift+g"
+
+# --- session / misc ---
+detach = "prefix+ctrl+d"                 # tmux: bind ^D detach
+reload_config = "prefix+shift+r"         # tmux: bind R source-file ~/.config/tmux/tmux.conf
+settings = "prefix+ctrl+s"               # moved off prefix+s (taken by split_horizontal)
+help = "prefix+?"
+toggle_sidebar = "prefix+b"
+edit_scrollback = "prefix+e"             # nearest thing to tmux: bind [ copy-mode
+open_notification_target = "prefix+ctrl+o"  # moved off prefix+o (fzf space picker)
+
+# --- navigate mode (vim motions, matches setw -g mode-keys vi) ---
+navigate_pane_left = "h"
+navigate_pane_down = "j"
+navigate_pane_up = "k"
+navigate_pane_right = "l"
+navigate_workspace_up = "up"
+navigate_workspace_down = "down"
+
+# tmux-floax equivalent: floating shell at 80%x80% (@floax-bind 'p')
+[[keys.command]]
+key = "prefix+p"
+type = "popup"
+command = "zsh -l"
+width = "80%"
+height = "80%"
+
+# fzf pickers, in the spirit of tmux-sessionx / tmux-fzf.
+# Absolute paths: herdr may exec these directly rather than through a shell,
+# so ~ would not expand. Update if $HOME changes.
+
+# tmux: @sessionx-bind 'o' — sessions there, spaces here
+[[keys.command]]
+key = "prefix+o"
+type = "popup"
+command = "/Users/etindame-mini/.config/herdr/scripts/herdr-pick.sh space"
+width = "75%"
+height = "60%"
+
+# tmux: bind w list-windows (prefix+w is herdr's own navigate mode)
+[[keys.command]]
+key = "prefix+ctrl+w"
+type = "popup"
+command = "/Users/etindame-mini/.config/herdr/scripts/herdr-pick.sh tab"
+width = "80%"
+height = "70%"
+
+# no tmux equivalent — jump straight to an agent by name/title
+[[keys.command]]
+key = "prefix+a"
+type = "popup"
+command = "/Users/etindame-mini/.config/herdr/scripts/herdr-pick.sh agent"
+width = "80%"
+height = "70%"
+
+[terminal]
+# tmux splits used -c "#{pane_current_path}"
+new_cwd = "follow"
+
+[ui]
+# tmux's ^N creates a window immediately without prompting for a name
+prompt_new_tab_name = false

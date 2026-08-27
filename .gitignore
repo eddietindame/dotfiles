@@ -55,6 +55,12 @@ tmux/plugins/
 !tmuxinator/
 !tmuxinator/**
 
+# Herdr - config and scripts, the rest is server state (session.json, logs, lock)
+!herdr/
+!herdr/config.toml
+!herdr/scripts/
+!herdr/scripts/**
+
 # README
 !README.md
 
