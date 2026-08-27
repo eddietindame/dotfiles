@@ -12,6 +12,7 @@ Usage: herdr-agent-view-follow.py <socket-path> <source-id>
 """
 
 import json
+import os
 import socket
 import sys
 import time
@@ -64,7 +65,7 @@ def label_for(sock_path, source, workspace_id):
     return None
 
 
-def run(sock_path, source, interval=0.4):
+def run(sock_path, source, interval=float(os.environ.get("HERDR_AGENT_VIEW_INTERVAL", "0.1"))):
     """Poll for the focused space and re-scope when it changes.
 
     The workspace.focused *event* looked like the right trigger, but herdr
