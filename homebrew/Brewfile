@@ -2,6 +2,7 @@ tap "felixkratz/formulae", trusted: true
 tap "nikitabobko/tap", trusted: true
 
 brew "git"
+brew "gh"
 brew "glow"
 brew "lazygit"
 brew "nvim"
@@ -10,6 +11,7 @@ brew "tmux"
 brew "tmuxinator"
 brew "sketchybar"
 brew "zoxide"
+brew "fzf"
 brew "eza"
 brew "starship"
 brew "prettier"
@@ -17,12 +19,16 @@ brew "herdr"
 brew "go"
 brew "volta"
 brew "delta"
+brew "mosh"
+# CLI tailscaled, not the GUI cask: only the open-source variant can run before
+# login (`sudo tailscaled install-system-daemon`), which a headless box needs.
+# Do not also install `cask "tailscale"` — the variants conflict.
+brew "tailscale"
 
 cask "ghostty"
 cask "claude-code"
 cask "aerospace"
 cask "font-sketchybar-app-font"
 cask "raycast"
-cask "tailscale"
 cask "font-fira-code-nerd-font"
 

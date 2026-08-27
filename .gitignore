@@ -69,6 +69,9 @@ tmuxinator/desktop-host
 # README
 !README.md
 
+# Operational commands for this machine
+!Makefile
+
 # QMK firmware
 !qmk/
 !qmk/**
