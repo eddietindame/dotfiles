@@ -98,6 +98,12 @@ command = "/Users/etindame-mini/.config/herdr/scripts/herdr-pick.sh agent"
 width = "80%"
 height = "70%"
 
+# scope the sidebar's agent panel to the focused space, or back to all spaces
+[[keys.command]]
+key = "prefix+shift+a"
+type = "shell"
+command = "/Users/etindame-mini/.config/herdr/scripts/herdr-agent-view.sh toggle"
+
 [terminal]
 # tmux splits used -c "#{pane_current_path}"
 new_cwd = "follow"
