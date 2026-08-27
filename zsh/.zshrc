@@ -81,6 +81,12 @@ tms() {
   tmuxinator start "$@"
 }
 
+# Attach to the mac mini's herdr session.
+# --remote-keybindings server is required, not cosmetic: a plain `herdr --remote`
+# honours the built-in actions but ignores every [[keys.command]] binding, so the
+# fzf pickers and the agent-view toggle silently do nothing.
+alias hmini="herdr --remote mini --remote-keybindings server"
+
 # Always upgrade claude-code
 alias claude="brew upgrade claude-code && claude"
 
