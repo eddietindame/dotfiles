@@ -44,6 +44,8 @@ new_workspace = "prefix+shift+n"
 rename_workspace = "prefix+shift+w"
 close_workspace = "prefix+shift+d"
 new_worktree = "prefix+shift+g"
+next_workspace = "prefix+ctrl+j"         # ctrl+j/k for spaces, matching the
+previous_workspace = "prefix+ctrl+k"     # shift+h/l tabs and shift+j/k agents
 
 # --- session / misc ---
 detach = "prefix+ctrl+d"                 # tmux: bind ^D detach
