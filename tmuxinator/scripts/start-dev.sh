@@ -82,11 +82,27 @@ short=$(sanitize "$fe_slug"); short="${short:0:28}"
 
 json_get() { jq -r "$1"; }
 
+LOG="$HOME/.start-dev.log"
+problems=0
+say() { # everything the herdr half reports goes to the terminal *and* a log,
+        # because `exec tmux attach` wipes the screen a moment later
+  printf '%s\n' "$1" >&2
+  printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M')" "$1" >>"$LOG"
+}
+warn() { problems=$((problems + 1)); say "$1"; }
+
 start_agent() { # <pane_id> <prefix>
-  local pane="$1" name="$2-$short"
-  if ! herdr agent start "$name" --kind "$AGENT_KIND" --pane "$pane" --timeout 60000 >/dev/null; then
-    echo "herdr: could not start $AGENT_KIND in $pane (pane left as a shell)" >&2
+  local pane="$1" name="$2-$short" err
+  err=$(herdr agent start "$name" --kind "$AGENT_KIND" --pane "$pane" --timeout 60000 2>&1 >/dev/null) && return 0
+
+  # `agent start` only returns 0 once the agent is ready for input. A fresh
+  # worktree makes claude open its "do you trust this folder?" gate first, so
+  # it reports agent_not_ready even though the agent launched fine.
+  if herdr agent list | jq -e --arg p "$pane" '.result.agents[] | select(.pane_id == $p)' >/dev/null 2>&1; then
+    say "herdr: $name started but is waiting on a prompt (trust dialog?) — answer it in $pane"
+    return 0
   fi
+  warn "herdr: could not start $AGENT_KIND in $pane (pane left as a shell): ${err:-unknown error}"
 }
 
 add_agent_tab() { # <workspace_id> <label> <cwd>
@@ -101,12 +117,12 @@ build_herdr_space() {
 
   for d in "$backend_root" "$frontend_root" "$packages_root"; do
     if [ ! -d "$d" ]; then
-      echo "herdr: $d does not exist yet" >&2
+      warn "herdr: $d does not exist yet"
       missing=true
     fi
   done
   if $missing; then
-    echo "herdr: run without --herdr-only first so the worktrees get created" >&2
+    warn "herdr: run without --herdr-only first so the worktrees get created"
     return 1
   fi
 
@@ -114,7 +130,7 @@ build_herdr_space() {
              | jq -r --arg l "$fe_branch" '.result.workspaces[] | select(.label == $l) | .workspace_id' \
              | head -1)
   if [ -n "$existing" ]; then
-    echo "herdr: space '$fe_branch' already exists ($existing) — not touching it"
+    say "herdr: space '$fe_branch' already exists ($existing) — not touching it"
     return 0
   fi
 
@@ -128,20 +144,25 @@ build_herdr_space() {
   add_agent_tab "$ws" bd "$frontend_root"
   add_agent_tab "$ws" bp "$packages_root"
 
-  echo "herdr: space '$fe_branch' ($ws) ready — bb, bd, bp"
+  say "herdr: space '$fe_branch' ($ws) ready — bb, bd, bp"
 }
 
 if ! $skip_herdr; then
   if herdr status server 2>/dev/null | grep -q '^status: running'; then
     build_herdr_space || true
   else
-    echo "herdr: server not running — start herdr in its Ghostty window, then:" >&2
-    echo "  $0 --herdr-only $fe_branch${be_branch:+ -be $be_branch}" >&2
+    warn "herdr: server not running — no space created. Open herdr, then run:"
+    warn "  $0 --herdr-only $fe_branch${be_branch:+ -be $be_branch}"
   fi
 fi
 
 # ~~~ land in tmux, as before ~~~
 if ! $herdr_only; then
+  # attaching wipes the screen, so hold anything gone wrong long enough to read
+  if [ "$problems" -gt 0 ]; then
+    say "herdr: $problems problem(s) above — also logged to $LOG"
+    sleep 4
+  fi
   session="$fe_branch"
   tmux has-session -t "=$session" 2>/dev/null || session="${fe_branch//./_}"
   if [ -n "${TMUX:-}" ]; then

@@ -125,6 +125,14 @@ idle/working/blocked state and `prefix+J` / `prefix+K` cycles between them. If a
 space with that label already exists, the script leaves it alone rather than
 adding a second set of agents.
 
+A brand-new worktree makes claude show its "do you trust this folder?" gate, so
+the agents start out `blocked` — answer the prompt in each tab once.
+
+Attaching to tmux wipes the screen, so anything the herdr half reports is also
+appended to `~/.start-dev.log`. Check there if a space doesn't appear. The usual
+cause is the herdr server being down at the time (it restarts on `herdr update`);
+re-run with `--herdr-only <branch>` once it's back.
+
 ### Worktree paths
 
 Branch slashes are replaced with dashes in directory names:
