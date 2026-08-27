@@ -119,12 +119,26 @@ cleanup-worktrees() {
 
   local branch="$1"
 
+  # Close the herdr space for this branch first, so its agents go down with the
+  # checkout instead of being left in deleted directories. start-dev labels the
+  # space with the frontend branch. No-op if herdr isn't running or has no
+  # matching space.
+  if command -v herdr >/dev/null 2>&1 && herdr status server >/dev/null 2>&1; then
+    local space
+    space=$(herdr workspace list 2>/dev/null |
+      jq -r --arg l "$branch" '.result.workspaces[] | select(.label == $l) | .workspace_id' |
+      head -1)
+    if [[ -n "$space" ]]; then
+      echo "Closing herdr space '$branch' ($space)"
+      herdr workspace close "$space" >/dev/null
+    fi
+  fi
+
   for dir in */; do
     [[ -d "$dir/.git" || -f "$dir/.git" ]] || continue
-    local worktree=$(
-      git -C "$dir" worktree list --porcelain | awk -v b="$branch"
-      '/^worktree /{wt=$2} /^branch /{if ($2 == "refs/heads/"b) print wt}'
-    )
+    local worktree
+    worktree=$(git -C "$dir" worktree list --porcelain |
+      awk -v b="$branch" '/^worktree /{wt=$2} /^branch /{if ($2 == "refs/heads/"b) print wt}')
     if [[ -n "$worktree" ]]; then
       echo "Removing worktree for '$branch' in $dir -> $worktree"
       git -C "$dir" worktree remove --force "$worktree"
