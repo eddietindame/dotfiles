@@ -55,17 +55,48 @@ sys.stdout.write(buf.split(b"\n")[0].decode())
 ' "$1"
 }
 
+# The {"context":"current_workspace_id"} filter value resolves against the
+# calling client, and a one-shot socket connection isn't one — the view goes
+# active but matches nothing visible. So look up the focused space and send its
+# literal id. Trade-off: the filter pins to whichever space was focused at the
+# time, instead of following the focus around.
 scope_space() {
-  local sock="$1"
-  api "$sock" >/dev/null <<JSON
-{"id":"$SOURCE_ID:set","method":"agent.view.set","params":{
-  "source":"$SOURCE_ID",
-  "label":"this space",
-  "filter":{"op":"eq","field":"workspace_id","value":{"context":"current_workspace_id"}}
-}}
-JSON
+  local sock="$1" label
+  label=$(python3 -c '
+import json, socket, sys
+
+sock = sys.argv[1]
+source = sys.argv[2]
+
+def call(method, params):
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.connect(sock)
+    s.sendall((json.dumps({"id": source + ":" + method, "method": method, "params": params}) + "\n").encode())
+    s.settimeout(5)
+    buf = b""
+    while b"\n" not in buf:
+        chunk = s.recv(65536)
+        if not chunk:
+            break
+        buf += chunk
+    return json.loads(buf.split(b"\n")[0])
+
+spaces = call("workspace.list", {}).get("result", {}).get("workspaces", [])
+focused = next((w for w in spaces if w.get("focused")), None)
+if focused is None:
+    sys.exit("no focused space")
+
+label = focused.get("label") or focused["workspace_id"]
+call("agent.view.set", {
+    "source": source,
+    "label": label,
+    "filter": {"op": "eq", "field": "workspace_id", "value": focused["workspace_id"]},
+})
+print(label)
+' "$sock" "$SOURCE_ID")
   mkdir -p "$STATE_DIR"
   printf 'space\n' >"$STATE_FILE"
+  log "pinned to space: $label"
 }
 
 scope_all() {
