@@ -15,7 +15,9 @@ set -euo pipefail
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
 STATE_FILE="$STATE_DIR/herdr-agent-view"
+PID_FILE="$STATE_DIR/herdr-agent-view.pid"
 SOURCE_ID="herdr-agent-view"
+FOLLOWER="$(cd "$(dirname "$0")" && pwd)/herdr-agent-view-follow.py"
 
 LOG_FILE="$STATE_DIR/herdr-agent-view.log"
 log() { mkdir -p "$STATE_DIR"; printf '%s %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG_FILE"; }
@@ -55,52 +57,40 @@ sys.stdout.write(buf.split(b"\n")[0].decode())
 ' "$1"
 }
 
-# The {"context":"current_workspace_id"} filter value resolves against the
-# calling client, and a one-shot socket connection isn't one — the view goes
-# active but matches nothing visible. So look up the focused space and send its
-# literal id. Trade-off: the filter pins to whichever space was focused at the
-# time, instead of following the focus around.
+follower_pid() { # echoes the pid if a follower is alive
+  local pid
+  pid=$(cat "$PID_FILE" 2>/dev/null) || return 1
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && printf '%s\n' "$pid"
+}
+
+# The follower applies the filter for the focused space immediately, then keeps
+# re-applying it on every workspace.focused event — which is what makes the
+# scope follow you around instead of pinning to one space.
 scope_space() {
-  local sock="$1" label
-  label=$(python3 -c '
-import json, socket, sys
-
-sock = sys.argv[1]
-source = sys.argv[2]
-
-def call(method, params):
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.connect(sock)
-    s.sendall((json.dumps({"id": source + ":" + method, "method": method, "params": params}) + "\n").encode())
-    s.settimeout(5)
-    buf = b""
-    while b"\n" not in buf:
-        chunk = s.recv(65536)
-        if not chunk:
-            break
-        buf += chunk
-    return json.loads(buf.split(b"\n")[0])
-
-spaces = call("workspace.list", {}).get("result", {}).get("workspaces", [])
-focused = next((w for w in spaces if w.get("focused")), None)
-if focused is None:
-    sys.exit("no focused space")
-
-label = focused.get("label") or focused["workspace_id"]
-call("agent.view.set", {
-    "source": source,
-    "label": label,
-    "filter": {"op": "eq", "field": "workspace_id", "value": focused["workspace_id"]},
-})
-print(label)
-' "$sock" "$SOURCE_ID")
-  mkdir -p "$STATE_DIR"
+  local sock="$1" pid
+  if pid=$(follower_pid); then
+    log "follower already running (pid $pid)"
+  else
+    mkdir -p "$STATE_DIR"
+    nohup python3 "$FOLLOWER" "$sock" "$SOURCE_ID" >>"$LOG_FILE" 2>&1 &
+    printf '%s\n' "$!" >"$PID_FILE"
+    log "follower started (pid $!)"
+  fi
   printf 'space\n' >"$STATE_FILE"
-  log "pinned to space: $label"
+}
+
+stop_follower() {
+  local pid
+  if pid=$(follower_pid); then
+    kill "$pid" 2>/dev/null || true
+    log "follower stopped (pid $pid)"
+  fi
+  rm -f "$PID_FILE"
 }
 
 scope_all() {
   local sock="$1"
+  stop_follower
   api "$sock" >/dev/null <<JSON
 {"id":"$SOURCE_ID:clear","method":"agent.view.clear","params":{"source":"$SOURCE_ID"}}
 JSON
