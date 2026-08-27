@@ -64,49 +64,22 @@ def label_for(sock_path, source, workspace_id):
     return None
 
 
-def run(sock_path, source):
-    # Catch up with wherever focus is right now before waiting for changes.
+def run(sock_path, source, interval=0.4):
+    """Poll for the focused space and re-scope when it changes.
+
+    The workspace.focused *event* looked like the right trigger, but herdr
+    emits it continuously for every space rather than on change — measured at
+    ~10/second alternating between two spaces while nothing was happening — so
+    subscribing to it makes the panel flicker. workspace.list reports focus
+    authoritatively, and polling it is cheap over a local socket.
+    """
     current = None
-    focused = next((w for w in spaces(sock_path, source) if w.get("focused")), None)
-    if focused:
-        apply_filter(sock_path, source, focused["workspace_id"], focused.get("label"))
-        current = focused["workspace_id"]
-
-    s = connect(sock_path)
-    s.sendall((json.dumps({
-        "id": f"{source}:subscribe",
-        "method": "events.subscribe",
-        "params": {"subscriptions": [{"type": "workspace.focused"}]},
-    }) + "\n").encode())
-
-    log("subscribed to workspace.focused")
-    buf = b""
     while True:
-        chunk = s.recv(65536)
-        if not chunk:
-            log("server closed the connection")
-            return
-        buf += chunk
-        while b"\n" in buf:
-            line, buf = buf.split(b"\n", 1)
-            if not line.strip():
-                continue
-            try:
-                msg = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            # Envelope is {"event": "<name>", "data": {...}} — "event" is a
-            # string, so the payload has to come from "data".
-            data = msg.get("data")
-            if not isinstance(data, dict) or data.get("type") != "workspace_focused":
-                continue
-            wid = data["workspace_id"]
-            # herdr re-emits workspace_focused constantly, not just on change,
-            # so only act when the focused space actually differs.
-            if wid == current:
-                continue
-            current = wid
-            apply_filter(sock_path, source, wid, label_for(sock_path, source, wid))
+        focused = next((w for w in spaces(sock_path, source) if w.get("focused")), None)
+        if focused is not None and focused["workspace_id"] != current:
+            current = focused["workspace_id"]
+            apply_filter(sock_path, source, current, focused.get("label"))
+        time.sleep(interval)
 
 
 if __name__ == "__main__":
@@ -114,5 +87,6 @@ if __name__ == "__main__":
         sys.exit(__doc__)
     try:
         run(sys.argv[1], sys.argv[2])
-    except (BrokenPipeError, ConnectionResetError, FileNotFoundError) as exc:
+    except (BrokenPipeError, ConnectionResetError, ConnectionRefusedError,
+            FileNotFoundError, OSError) as exc:
         log(f"exiting: {exc}")
