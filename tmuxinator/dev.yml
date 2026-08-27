@@ -3,6 +3,7 @@
 #
 # Options:
 #   -be,  --backend <branch>      Backend branch (defaults to frontend branch)
+#   -w,   --web [branch]          Include bertie-web repo (off unless passed). Branch optional: defaults to frontend branch.
 #   -d,   --docker <n>            Docker instance number (auto-detected if omitted)
 #   -b,   --base <branch>         Base branch for both repos (default: HEAD)
 #   -bfe, --base-fe <branch>      Base branch for frontend only
@@ -13,20 +14,14 @@
 #   tmuxinator start dev feat/my-feature                              # both repos, docker=1
 #   tmuxinator start dev feat/my-feature -d 2                         # both repos, docker=2
 #   tmuxinator start dev bdesk-payment-match -be bb-bdx               # separate branches
+#   tmuxinator start dev feat/my-feature -w feat/web-branch           # include bertie-web
 #   tmuxinator start dev feat/my-feature -b develop                   # both off develop
 #   tmuxinator start dev feat/my-feature -bfe feat/fe-base -bbe feat/be-base  # separate bases
 #   tmuxinator start dev feat/my-feature -b develop -r                # rebase existing onto develop
 
 <%
-  require 'socket'
-
-  port_free = lambda do |port|
-    s = TCPServer.new(port)
-    s.close
-    true
-  rescue Errno::EADDRINUSE, Errno::EACCES
-    false
-  end
+  listening_ports = `netstat -an -p tcp 2>/dev/null`.scan(/[.:](\d+)\s+\S+\s+LISTEN/).flatten.map(&:to_i).uniq
+  port_free = ->(port) { !listening_ports.include?(port) }
 
   opts = {}
   positional = []
@@ -35,6 +30,13 @@
     case @args[i]
     when '--backend', '-be'
       opts[:backend] = @args[i + 1]; i += 2
+    when '--web', '-w'
+      nxt = @args[i + 1]
+      if nxt && !nxt.start_with?('-')
+        opts[:web] = nxt; i += 2
+      else
+        opts[:web] = :default; i += 1
+      end
     when '--docker', '-d'
       opts[:docker] = @args[i + 1]; i += 2
     when '--base', '-b'
@@ -52,7 +54,9 @@
 
   frontend_branch = positional[0]
   backend_branch = opts[:backend] || frontend_branch
-  docker_instance = opts[:docker] ? opts[:docker].to_i : (0..).find { |n| port_free.(5432 + n) && port_free.(3000 + n) }
+  # Starts at 1: instance 0 would put the backend on 3000 and postgres on 5432,
+  # which the fixed auth stack (auth server + its docker-compose) always occupies.
+  docker_instance = opts[:docker] ? opts[:docker].to_i : (1..).find { |n| port_free.(5432 + n) && port_free.(3000 + n) }
   base_fe = opts[:base_fe] || opts[:base]
   base_be = opts[:base_be] || opts[:base]
   rebase = opts[:rebase] ? "1" : ""
@@ -60,13 +64,19 @@
   backend_port = 3000 + docker_instance
   fe_slug = frontend_branch.gsub('/', '-')
   be_slug = backend_branch.gsub('/', '-')
+  web_branch = opts[:web] == :default ? frontend_branch : opts[:web]
+  web_slug = web_branch&.gsub('/', '-')
   frontend_root = "~/Documents/bertie/bertie-desktop/#{fe_slug}"
   backend_root = "~/Documents/bertie/bertie-backend/#{be_slug}"
   packages_root = "~/Documents/bertie/bertie-packages/#{fe_slug}"
+  web_root = web_branch ? "~/Documents/bertie/bertie-web/#{web_slug}" : nil
   auth_root = "~/Documents/bertie/bertie-auth/ba-stg"
+  auth_port = 3000
+  auth_url = "http://localhost:#{auth_port}"
   frontend_main = "~/Documents/bertie/bertie-desktop/bdesk"
   backend_main = "~/Documents/bertie/bertie-backend/bb-master"
   packages_main = "~/Documents/bertie/bertie-packages/bp-main"
+  web_main = "~/Documents/bertie/bertie-web/bw-staging"
 %>
 
 name: <%= frontend_branch %>
@@ -75,8 +85,12 @@ on_project_start:
   - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= frontend_main %>" "<%= frontend_root %>" "<%= frontend_branch %>"<%= base_fe ? " \"#{base_fe}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>
   - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= backend_main %>" "<%= backend_root %>" "<%= backend_branch %>"<%= base_be ? " \"#{base_be}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>
   - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= packages_main %>" "<%= packages_root %>" "<%= frontend_branch %>"<%= base_fe ? " \"#{base_fe}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>
-  - mkdir -p "<%= backend_root %>/tmp" && printf 'POSTGRES_PORT=<%= postgres_port %>\nBACKEND_PORT=<%= backend_port %>\nDOCKER_INSTANCE=<%= docker_instance %>\nFRONTEND_ROOT=<%= frontend_root %>\nBACKEND_ROOT=<%= backend_root %>\nPACKAGES_ROOT=<%= packages_root %>\n' > "<%= backend_root %>/tmp/.env"
-  - ~/.config/tmuxinator/scripts/generate-repos-txt.sh "<%= frontend_branch %>" "<%= backend_branch %>"
+<% if web_branch %>  - ~/.config/tmuxinator/scripts/ensure-worktree.sh "<%= web_main %>" "<%= web_root %>" "<%= web_branch %>"<%= base_fe ? " \"#{base_fe}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>
+<% end %>  - mkdir -p "<%= backend_root %>/tmp" && printf 'POSTGRES_PORT=<%= postgres_port %>\nBACKEND_PORT=<%= backend_port %>\nDOCKER_INSTANCE=<%= docker_instance %>\nFRONTEND_ROOT=<%= frontend_root %>\nBACKEND_ROOT=<%= backend_root %>\nPACKAGES_ROOT=<%= packages_root %>\n<%= web_root ? "WEB_ROOT=#{web_root}\\n" : "" %>' > "<%= backend_root %>/tmp/.env"
+<% if web_branch %>  - mkdir -p "<%= web_root %>/tmp" && printf 'BACKEND_URL=http://localhost:<%= backend_port %>\nAUTH_URL=<%= auth_url %>\n' > "<%= web_root %>/tmp/.env"
+  - f="<%= web_root %>/.env"; touch "$f"; grep -q '^BERTIE_BACKEND_PROXY_URL=' "$f" && sed -i '' 's|^BERTIE_BACKEND_PROXY_URL=.*|BERTIE_BACKEND_PROXY_URL=http://localhost:<%= backend_port %>|' "$f" || printf 'BERTIE_BACKEND_PROXY_URL=http://localhost:<%= backend_port %>\n' >> "$f"
+<% end %>
+  - ~/.config/tmuxinator/scripts/generate-repos-txt.sh "<%= frontend_branch %>" "<%= backend_branch %>" "<%= frontend_branch %>" "<%= web_branch %>"
 
 windows:
   - bbs:
@@ -86,7 +100,7 @@ windows:
         - DOCKER_SUFFIX=<%= docker_instance %> POSTGRES_PORT=<%= postgres_port %> docker-compose -p bertie-backend-<%= be_slug.downcase %> up
         - cd <%= auth_root %> && docker-compose up
         - pnpm i && POSTGRES_PORT=<%= postgres_port %> pnpm db:setup && POSTGRES_PORT=<%= postgres_port %> pnpm dev -p <%= backend_port %>
-        - cd <%= auth_root %> && POSTGRES_PORT=5432 npm i && BACKEND_SERVER_URL=http://localhost:<%= backend_port %> npm run dev
+        - cd <%= auth_root %> && POSTGRES_PORT=5432 npm i && BACKEND_SERVER_URL=http://localhost:<%= backend_port %> PORT=<%= auth_port %> npm run dev
 
   - bb:
       root: <%= backend_root %>
@@ -124,4 +138,13 @@ windows:
       panes:
         - nvim
         - npm i && claude
+
+<% if web_branch %>  - bw:
+      root: <%= web_root %>
+      layout: even-horizontal
+      panes:
+        - nvim
+        - claude
+        - npm i
+<% end %>
 

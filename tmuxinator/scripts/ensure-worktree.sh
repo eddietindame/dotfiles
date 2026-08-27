@@ -24,6 +24,12 @@ done
 main_worktree="${main_worktree/#\~/$HOME}"
 target_path="${target_path/#\~/$HOME}"
 
+# If a stray directory exists at the target but it's not a worktree, remove it
+if [ -d "$target_path" ] && [ ! -e "$target_path/.git" ]; then
+    echo "ensure-worktree.sh: $target_path exists but is not a git worktree, removing"
+    rm -rf "$target_path"
+fi
+
 # If worktree already exists
 if [ -d "$target_path" ]; then
     if [ -f "$main_worktree/.env" ] && [ ! -f "$target_path/.env" ]; then
