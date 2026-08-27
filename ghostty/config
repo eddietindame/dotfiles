@@ -58,6 +58,9 @@ background-opacity = 0.9
 background-blur = true
 # window-decoration = none
 macos-titlebar-style = hidden
+# Send Option as Alt so alt+ chords reach the terminal (herdr focus_agent = prefix+alt+1..9).
+# Use "left" instead of "true" if you want right-Option to keep typing Unicode chars.
+macos-option-as-alt = true
 window-save-state = always
 cursor-style = block
 keybind = global:alt+shift+t=toggle_quick_terminal
