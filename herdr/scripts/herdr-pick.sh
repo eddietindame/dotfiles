@@ -7,6 +7,7 @@
 #   prefix+o        space picker   (mirrors tmux's sessionx bind)
 #   prefix+ctrl+w   tab picker     (mirrors tmux's `w` list-windows)
 #   prefix+a        agent picker   (no tmux equivalent)
+#   prefix+u        url picker     (mirrors tmux-fzf-url)
 #
 # Note: config.toml calls this by absolute path, since herdr may exec the
 # command directly rather than through a shell. Update that path if $HOME
@@ -82,9 +83,53 @@ pick_agent() {
   herdr agent focus "$(cut -f1 <<<"$sel")" >/dev/null
 }
 
+
+# tmux-fzf-url equivalent. Reads the focused pane's scrollback, since that is
+# where the URL you just saw will be.
+#
+# Opening is the awkward part on a remote attach: this script runs on the herdr
+# server, so `open <url>` would launch a browser there rather than on the
+# machine you are sitting at. So:
+#   - if ~/.config/herdr/client-ssh holds an ssh target (or HERDR_CLIENT_SSH is
+#     set), run `open` over ssh there. An env var alone is not enough: this runs
+#     as a child of the herdr server, which does not inherit your login shell.
+#   - otherwise copy to the clipboard with OSC 52, which herdr forwards to the
+#     attached client's terminal, and you paste where you want it
+pick_url() {
+  local pane rows sel url
+  pane=$(herdr pane list | jq -r '.result.panes[] | select(.focused) | .pane_id' | head -1)
+  [ -n "$pane" ] || die "no focused pane"
+
+  rows=$(herdr pane read "$pane" --source recent --lines 2000 --format text \
+         | grep -oE '(https?|ftp|file)://[^ \t"'"'"'<>()\[\]`|]+' \
+         | sed 's/[.,;:!?]*$//' \
+         | awk '!seen[$0]++' \
+         | tail -r)
+  [ -n "$rows" ] || die "no urls in this pane"
+
+  sel=$(printf '%s\n' "$rows" | fzf \
+        --height=100% --border=rounded --info=inline --pointer='▎' --no-multi \
+        --prompt='urls ❯ ') || exit 0
+  url="$sel"
+
+  local target="${HERDR_CLIENT_SSH:-}"
+  [ -n "$target" ] || target=$(cat "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/client-ssh" 2>/dev/null | head -1)
+
+  if [ -n "$target" ] &&
+     ssh -o BatchMode=yes -o ConnectTimeout=3 "$target" "open '$url'" 2>/dev/null; then
+    printf 'opened on %s\n' "$target"
+  else
+    # OSC 52: ask the attached terminal to put this on its own clipboard
+    printf '\033]52;c;%s\a' "$(printf '%s' "$url" | base64 | tr -d '\n')"
+    printf 'copied to clipboard: %s\n' "$url"
+  fi
+  sleep 1
+}
+
 case "${1:-}" in
   space|spaces|workspace) pick_space ;;
   tab|tabs)               pick_tab ;;
   agent|agents)           pick_agent ;;
-  *) die "usage: $(basename "$0") space|tab|agent" ;;
+  url|urls)               pick_url ;;
+  *) die "usage: $(basename "$0") space|tab|agent|url" ;;
 esac

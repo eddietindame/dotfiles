@@ -100,6 +100,16 @@ command = "/Users/etindame-mini/.config/herdr/scripts/herdr-pick.sh agent"
 width = "80%"
 height = "70%"
 
+# tmux: @fzf-url-bind — pick a url out of the focused pane's scrollback.
+# Opens on the client machine if ~/.config/herdr/client-ssh names a reachable
+# host, otherwise copies to the client's clipboard via OSC 52.
+[[keys.command]]
+key = "prefix+u"
+type = "popup"
+command = "/Users/etindame-mini/.config/herdr/scripts/herdr-pick.sh url"
+width = "60%"
+height = "30%"
+
 # scope the sidebar's agent panel to the focused space, or back to all spaces
 [[keys.command]]
 key = "prefix+shift+a"
