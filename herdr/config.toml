@@ -98,9 +98,11 @@ command = "/Users/etindame-mini/.config/herdr/scripts/herdr-pick.sh agent"
 width = "80%"
 height = "70%"
 
-# scope the sidebar's agent panel to the focused space, or back to all spaces
+# scope the sidebar's agent panel to the focused space, or back to all spaces.
+# ctrl+letter rather than shift+a: herdr's docs call ctrl chords the most
+# reliable, and shift+a risked being folded into the prefix+a binding above.
 [[keys.command]]
-key = "prefix+shift+a"
+key = "prefix+ctrl+a"
 type = "shell"
 command = "/Users/etindame-mini/.config/herdr/scripts/herdr-agent-view.sh toggle"
 
