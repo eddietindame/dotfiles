@@ -78,7 +78,7 @@ height = "80%"
 [[keys.command]]
 key = "prefix+o"
 type = "popup"
-command = "~/.config/herdr/scripts/herdr-pick.sh space"
+command = "/Users/etindame-mini/.config/herdr/scripts/herdr-pick.sh space"
 width = "75%"
 height = "60%"
 
@@ -86,7 +86,7 @@ height = "60%"
 [[keys.command]]
 key = "prefix+ctrl+w"
 type = "popup"
-command = "~/.config/herdr/scripts/herdr-pick.sh tab"
+command = "/Users/etindame-mini/.config/herdr/scripts/herdr-pick.sh tab"
 width = "80%"
 height = "70%"
 
@@ -94,7 +94,7 @@ height = "70%"
 [[keys.command]]
 key = "prefix+a"
 type = "popup"
-command = "~/.config/herdr/scripts/herdr-pick.sh agent"
+command = "/Users/etindame-mini/.config/herdr/scripts/herdr-pick.sh agent"
 width = "80%"
 height = "70%"
 
