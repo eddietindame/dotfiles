@@ -96,16 +96,24 @@ pick_agent() {
 #   - otherwise copy to the clipboard with OSC 52, which herdr forwards to the
 #     attached client's terminal, and you paste where you want it
 pick_url() {
-  local pane rows sel url
-  pane=$(herdr pane list | jq -r '.result.panes[] | select(.focused) | .pane_id' | head -1)
-  [ -n "$pane" ] || die "no focused pane"
+  local pane rows sel url log="${XDG_STATE_HOME:-$HOME/.local/state}/herdr-pick.log"
+  mkdir -p "$(dirname "$log")"
+
+  # Inside a popup the UI-focused pane can be the popup itself, so prefer the
+  # caller context herdr injects into the pane it spawned us from.
+  pane="${HERDR_PANE_ID:-}"
+  [ -n "$pane" ] ||
+    pane=$(herdr pane list | jq -r '.result.panes[] | select(.focused) | .pane_id' | head -1)
+  printf '%s url: HERDR_PANE_ID=%s resolved=%s\n' "$(date '+%H:%M:%S')" "${HERDR_PANE_ID:-unset}" "${pane:-none}" >>"$log"
+  [ -n "$pane" ] || die "no pane to read"
 
   rows=$(herdr pane read "$pane" --source recent --lines 2000 --format text \
          | grep -oE '(https?|ftp|file)://[^ \t"'"'"'<>()\[\]`|]+' \
          | sed 's/[.,;:!?]*$//' \
          | awk '!seen[$0]++' \
          | tail -r)
-  [ -n "$rows" ] || die "no urls in this pane"
+  printf '%s url: %s candidates from %s\n' "$(date '+%H:%M:%S')" "$(printf '%s' "$rows" | grep -c . || true)" "$pane" >>"$log"
+  [ -n "$rows" ] || die "no urls in $pane"
 
   sel=$(printf '%s\n' "$rows" | fzf \
         --height=100% --border=rounded --info=inline --pointer='▎' --no-multi \
