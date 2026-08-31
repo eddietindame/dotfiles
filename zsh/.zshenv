@@ -15,3 +15,19 @@ case ":$PATH:" in
   *":/opt/homebrew/bin:"*) ;;
   *) export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH" ;;
 esac
+
+# Volta only manages pnpm as a first-class package manager behind this flag.
+# Without it the ~/.volta/bin/pnpm shim fails with "Could not find executable",
+# even though `volta list` shows pnpm installed.
+export VOLTA_FEATURE_PNPM=1
+
+# Volta shims (node/npm/npx/pnpm/yarn). Prepended AFTER the Homebrew block
+# above so it lands ahead of /opt/homebrew/bin — prettier pulls in a Homebrew
+# node that otherwise shadows Volta's. Lives here rather than .zshrc because
+# tmux panes, start-dev.sh and `ssh host -- cmd` all run non-interactively and
+# would otherwise get the wrong node and no pnpm at all.
+export VOLTA_HOME="$HOME/.volta"
+case ":$PATH:" in
+  *":$VOLTA_HOME/bin:"*) ;;
+  *) export PATH="$VOLTA_HOME/bin:$PATH" ;;
+esac

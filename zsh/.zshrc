@@ -5,6 +5,14 @@ export XDG_CONFIG_HOME="$HOME/.config"
 export PATH="$HOME/bin:$PATH"
 GOPATH=$HOME/go PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 
+# Volta (node/npm/npx/pnpm/yarn shims) is set up in .zshenv so non-interactive
+# shells get it too. It must be re-asserted here because login shells run
+# /etc/zprofile -> path_helper AFTER .zshenv, and that reorders PATH so
+# /opt/homebrew/bin (prettier's node) lands ahead of Volta's shims again.
+# typeset -U dedupes, so this moves the entry rather than adding a second.
+typeset -U path
+path=("$VOLTA_HOME/bin" $path)
+
 # The next line updates PATH for the Google Cloud SDK.
 if [ -f "$HOME/google-cloud-sdk/path.zsh.inc" ]; then . "$HOME/google-cloud-sdk/path.zsh.inc"; fi
 
