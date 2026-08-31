@@ -87,6 +87,32 @@ tms() {
 # fzf pickers and the agent-view toggle silently do nothing.
 alias hmini="herdr --remote mini --remote-keybindings server"
 
+# Forward a dev instance's ports from the mini, so localhost:<port> here is
+# localhost:<port> there. Matters because the generated .env files point at
+# http://localhost:PORT, which only resolves correctly if the ports are local.
+#   bertie-tunnel        # instance 1: backend 3001, postgres 5433, auth 3000
+#   bertie-tunnel 2      # instance 2: backend 3002, postgres 5434, auth 3000
+#   bertie-tunnel 2 5173 # ...plus a frontend dev server on 5173
+bertie-tunnel() {
+  local n="${1:-1}"
+  shift 2>/dev/null
+  local backend=$((3000 + n)) postgres=$((5432 + n))
+  local -a forwards
+  forwards=(
+    -L "${backend}:localhost:${backend}"
+    -L "${postgres}:localhost:${postgres}"
+    -L "3000:localhost:3000"   # auth stack is fixed, not offset
+  )
+  local p
+  for p in "$@"; do forwards+=(-L "${p}:localhost:${p}"); done
+
+  echo "tunnelling from mini: backend $backend, postgres $postgres, auth 3000${*:+, extra $*}"
+  echo "(ctrl-c to stop)"
+  # ExitOnForwardFailure so a port already in use fails loudly instead of
+  # leaving you wondering why localhost:3001 is the wrong app.
+  ssh -N -o ExitOnForwardFailure=yes "${forwards[@]}" mini
+}
+
 # Always upgrade claude-code
 alias claude="brew upgrade claude-code && claude"
 
