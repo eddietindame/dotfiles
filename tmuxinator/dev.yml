@@ -47,6 +47,8 @@
       opts[:base_be] = @args[i + 1]; i += 2
     when '--rebase', '-r'
       opts[:rebase] = true; i += 1
+    when '--desktop-local', '-dl'
+      opts[:desktop_local] = true; i += 1
     else
       positional << @args[i]; i += 1
     end
@@ -60,6 +62,22 @@
   base_fe = opts[:base_fe] || opts[:base]
   base_be = opts[:base_be] || opts[:base]
   rebase = opts[:rebase] ? "1" : ""
+
+  # Run the Electron app on the machine you are sitting at, while the rest of the
+  # stack stays here. The -R forwards make this host's backend/postgres/auth
+  # appear on the remote's localhost at the same ports, so the app's .env needs
+  # no changes. Requires a checkout with node_modules over there: better-sqlite3
+  # is rebuilt per platform, so the tree cannot be shared.
+  desktop_local = opts[:desktop_local] ? true : false
+  desktop_host = nil
+  if desktop_local
+    host_file = File.expand_path("~/.config/tmuxinator/desktop-host")
+    unless File.exist?(host_file)
+      raise "--desktop-local needs an ssh target in #{host_file} (one line, e.g. macbook)"
+    end
+    desktop_host = File.read(host_file).lines.first.to_s.strip
+    raise "#{host_file} is empty" if desktop_host.empty?
+  end
   postgres_port = 5432 + docker_instance
   backend_port = 3000 + docker_instance
   fe_slug = frontend_branch.gsub('/', '-')
@@ -131,7 +149,8 @@ windows:
       layout: even-horizontal
       panes:
         - nvim
-        - claude
+<% if desktop_local %>        - ssh -R <%= backend_port %>:localhost:<%= backend_port %> -R <%= postgres_port %>:localhost:<%= postgres_port %> -R <%= auth_port %>:localhost:<%= auth_port %> <%= desktop_host %> 'cd ~/Documents/bertie/bertie-desktop/<%= fe_slug %> && npm run dev'
+<% end %>        - claude
 
   - bds:
       root: <%= frontend_root %>
