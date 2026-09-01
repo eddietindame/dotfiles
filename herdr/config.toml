@@ -123,3 +123,15 @@ new_cwd = "follow"
 [ui]
 # tmux's ^N creates a window immediately without prompting for a name
 prompt_new_tab_name = false
+
+# Sidebar agent rows: lead with the claude conversation title rather than the
+# space/tab it happens to live in. terminal_title_stripped is the chat name with
+# claude's status glyph removed; the space/tab still shows underneath, dimmer.
+[ui.sidebar.agents]
+rows = [["state_icon", "workspace", "tab"], ["agent"]]
+
+[ui.sidebar.agents.rows_by_agent]
+claude = [
+  ["state_icon", "terminal_title_stripped"],
+  ["workspace", "tab"],
+]
