@@ -47,7 +47,7 @@
       opts[:base_be] = @args[i + 1]; i += 2
     when '--rebase', '-r'
       opts[:rebase] = true; i += 1
-    when '--desktop-local', '-dl'
+    when '--desktop-local', '-l'
       opts[:desktop_local] = true; i += 1
     else
       positional << @args[i]; i += 1
