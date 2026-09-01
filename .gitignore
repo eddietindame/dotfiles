@@ -61,6 +61,10 @@ tmux/plugins/
 !herdr/scripts/
 !herdr/scripts/**
 
+# Scripts (client-side helpers, e.g. the deep link relay)
+!scripts/
+!scripts/**
+
 # README
 !README.md
 
