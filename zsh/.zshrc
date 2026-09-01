@@ -147,7 +147,7 @@ function nvims() {
 
 cleanup-worktrees() {
   if [[ -z "$1" ]]; then
-    echo "Usage: cleanup-worktrees <branch-name>"
+    echo "Usage: cleanup-worktrees <branch-name>  (run from ~/Documents/bertie or a repo dir)"
     return 1
   fi
 
@@ -161,23 +161,46 @@ cleanup-worktrees() {
     local space
     space=$(herdr workspace list 2>/dev/null |
       jq -r --arg l "$branch" '.result.workspaces[] | select(.label == $l) | .workspace_id' |
-      head -1)
+      awk 'NR==1')
     if [[ -n "$space" ]]; then
       echo "Closing herdr space '$branch' ($space)"
       herdr workspace close "$space" >/dev/null
     fi
   fi
 
+  # Repos live at <root>/<repo>/<checkout>, so a plain */ from the root finds
+  # only the repo folders, which aren't checkouts themselves. Accept either
+  # level: use */ when it is a checkout, otherwise look inside it.
+  local -a repos
+  local dir sub
   for dir in */; do
-    [[ -d "$dir/.git" || -f "$dir/.git" ]] || continue
-    local worktree
-    worktree=$(git -C "$dir" worktree list --porcelain |
-      awk -v b="$branch" '/^worktree /{wt=$2} /^branch /{if ($2 == "refs/heads/"b) print wt}')
-    if [[ -n "$worktree" ]]; then
-      echo "Removing worktree for '$branch' in $dir -> $worktree"
-      git -C "$dir" worktree remove --force "$worktree"
+    if [[ -d "$dir/.git" || -f "$dir/.git" ]]; then
+      repos+=("$dir")
+    else
+      for sub in "$dir"*/; do
+        [[ -d "$sub/.git" || -f "$sub/.git" ]] && repos+=("$sub")
+      done
     fi
   done
+
+  local worktree found=0
+  local -A seen
+  for dir in "${repos[@]}"; do
+    [[ -d "$dir" ]] || continue   # may have been removed as a worktree already
+    worktree=$(git -C "$dir" worktree list --porcelain |
+      awk -v b="$branch" '/^worktree /{wt=$2} /^branch /{if ($2 == "refs/heads/"b) print wt}')
+    [[ -n "$worktree" ]] || continue
+    [[ -n "${seen[$worktree]}" ]] && continue   # same worktree seen via another checkout
+    seen[$worktree]=1
+    found=1
+    echo "Removing worktree for '$branch' -> $worktree"
+    git -C "$dir" worktree remove --force "$worktree"
+  done
+
+  if (( ! found )); then
+    echo "No worktrees for '$branch' found under $PWD"
+    return 1
+  fi
 }
 
 # Increase memory for eslint
