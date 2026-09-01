@@ -30,6 +30,20 @@ if [ -d "$target_path" ] && [ ! -e "$target_path/.git" ]; then
     rm -rf "$target_path"
 fi
 
+# Fail loudly if the repo was never cloned. Without this the script falls through
+# to `cd "$main_worktree"` and dies with a bare "no such file or directory",
+# while tmuxinator carries on building windows over a half-made environment.
+if [ ! -d "$main_worktree" ]; then
+    echo "ensure-worktree: main worktree not found: $main_worktree" >&2
+    echo "  clone the repo there first, then re-run." >&2
+    exit 1
+fi
+
+if ! git -C "$main_worktree" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "ensure-worktree: not a git repository: $main_worktree" >&2
+    exit 1
+fi
+
 # If worktree already exists
 if [ -d "$target_path" ]; then
     if [ -f "$main_worktree/.env" ] && [ ! -f "$target_path/.env" ]; then
