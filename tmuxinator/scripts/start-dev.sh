@@ -38,7 +38,7 @@ while [ $# -gt 0 ]; do
       be_branch="$2"; forward+=("$1" "$2"); shift 2 ;;
     -d|--docker|-b|--base|-bfe|--base-fe|-bbe|--base-be)
       forward+=("$1" "$2"); shift 2 ;;
-    -r|--rebase|-c|--claude)
+    -r|--rebase|-c|--claude|-l|--desktop-local)
       forward+=("$1"); shift ;;
     *)
       [ -z "$fe_branch" ] && fe_branch="$1"
@@ -48,7 +48,7 @@ done
 
 if [ -z "$fe_branch" ]; then
   cat >&2 <<USAGE
-usage: $(basename "$0") <branch> [-be BRANCH] [-d N] [-b BASE] [-bfe BASE] [-bbe BASE] [-r] [-c]
+usage: $(basename "$0") <branch> [-be BRANCH] [-d N] [-b BASE] [-bfe BASE] [-bbe BASE] [-r] [-c] [-l]
        $(basename "$0") --herdr-only <branch> [-be BRANCH]
        $(basename "$0") --no-herdr <branch> [...]
 
