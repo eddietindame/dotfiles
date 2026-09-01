@@ -60,7 +60,7 @@ pick_tab() {
 
   sel=$(printf '%s\n' "$rows" | fzf "${FZF_OPTS[@]}" \
         --prompt='tabs ❯ ' \
-        --preview='herdr pane list | jq -r --arg t {1} ".result.panes[] | select(.tab_id == \$t) | .pane_id" | head -1 | xargs -r -I% herdr pane read % --source visible --lines 60 --format text' \
+        --preview='herdr pane list | jq -r --arg t {1} ".result.panes[] | select(.tab_id == \$t) | .pane_id" | awk 'NR==1' | xargs -r -I% herdr pane read % --source visible --lines 60 --format text' \
         --preview-window='right,60%,border-left') || exit 0
   herdr tab focus "$(cut -f1 <<<"$sel")" >/dev/null
 }
@@ -103,7 +103,7 @@ pick_url() {
   # caller context herdr injects into the pane it spawned us from.
   pane="${HERDR_PANE_ID:-}"
   [ -n "$pane" ] ||
-    pane=$(herdr pane list | jq -r '.result.panes[] | select(.focused) | .pane_id' | head -1)
+    pane=$(herdr pane list | jq -r '.result.panes[] | select(.focused) | .pane_id' | awk 'NR==1')
   printf '%s url: HERDR_PANE_ID=%s resolved=%s\n' "$(date '+%H:%M:%S')" "${HERDR_PANE_ID:-unset}" "${pane:-none}" >>"$log"
   [ -n "$pane" ] || die "no pane to read"
 
@@ -121,7 +121,7 @@ pick_url() {
   url="$sel"
 
   local target="${HERDR_CLIENT_SSH:-}"
-  [ -n "$target" ] || target=$(cat "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/client-ssh" 2>/dev/null | head -1)
+  [ -n "$target" ] || target=$(awk 'NR==1' "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/client-ssh" 2>/dev/null || true)
 
   if [ -n "$target" ] &&
      ssh -o BatchMode=yes -o ConnectTimeout=3 "$target" "open '$url'" 2>/dev/null; then
