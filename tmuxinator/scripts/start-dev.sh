@@ -74,15 +74,19 @@ packages_root="$REPO_ROOT/bertie-packages/$fe_slug"
 # session by then. Check up front so nothing is created on a broken setup, and
 # report every missing repo at once rather than one per re-run.
 if ! $herdr_only; then
+  # Same discovery rule as dev.yml: the base clone is the subdirectory whose
+  # .git is a directory. Linked worktrees have .git as a file pointing back at
+  # it, so this finds the clone whatever the folder is called.
   missing_repos=()
-  for main in "$REPO_ROOT/bertie-desktop/bdesk" \
-              "$REPO_ROOT/bertie-backend/bb-master" \
-              "$REPO_ROOT/bertie-packages/bp-main" \
-              "$REPO_ROOT/bertie-auth/ba-stg"; do
-    git -C "$main" rev-parse --git-dir >/dev/null 2>&1 || missing_repos+=("$main")
+  for repo in bertie-desktop bertie-backend bertie-packages bertie-auth; do
+    found=""
+    for candidate in "$REPO_ROOT/$repo"/*/; do
+      [ -d "${candidate}.git" ] && { found="$candidate"; break; }
+    done
+    [ -n "$found" ] || missing_repos+=("$REPO_ROOT/$repo")
   done
   if [ ${#missing_repos[@]} -gt 0 ]; then
-    echo "start-dev: these repos are missing or aren't git checkouts:" >&2
+    echo "start-dev: no base checkout found in:" >&2
     printf '  %s\n' "${missing_repos[@]}" >&2
     echo "Clone them before starting a dev environment." >&2
     exit 1
