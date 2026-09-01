@@ -149,7 +149,7 @@ windows:
       layout: even-horizontal
       panes:
         - nvim
-<% if desktop_local %>        - ssh -R <%= backend_port %>:localhost:<%= backend_port %> -R <%= postgres_port %>:localhost:<%= postgres_port %> -R <%= auth_port %>:localhost:<%= auth_port %> <%= desktop_host %> 'cd ~/Documents/bertie/bertie-desktop/<%= fe_slug %> && npm run dev'
+<% if desktop_local %>        - ssh -R <%= backend_port %>:localhost:<%= backend_port %> -R <%= postgres_port %>:localhost:<%= postgres_port %> -R <%= auth_port %>:localhost:<%= auth_port %> <%= desktop_host %> '~/.config/tmuxinator/scripts/desktop-dev.sh "<%= frontend_branch %>"<%= base_fe ? " \"#{base_fe}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>'
 <% end %>        - claude
 
   - bds:

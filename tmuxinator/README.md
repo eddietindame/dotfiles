@@ -22,7 +22,7 @@ mux start dev <branch> [options]
 | `-bfe` | `--base-fe` | Base branch for frontend only. Overrides `-b`. |
 | `-bbe` | `--base-be` | Base branch for backend only. Overrides `-b`. |
 | `-r` | `--rebase` | Rebase existing worktrees onto their base branch instead of creating new ones. Requires `-b`, `-bfe`, or `-bbe`. |
-| `-l` | `--desktop-local` | Run the Electron app over ssh on the machine you're sitting at, instead of here — macOS can't forward a window, so an app started here is only visible here. Needs an ssh target in `~/.config/tmuxinator/desktop-host` (one line, untracked), plus a checkout with `node_modules` on that machine. |
+| `-l` | `--desktop-local` | Run the Electron app over ssh on the machine you're sitting at, instead of here — macOS can't forward a window, so an app started here is only visible here. Needs an ssh target in `~/.config/tmuxinator/desktop-host` (one line, untracked), these dotfiles, and a base clone of `bertie-desktop` on that machine. `scripts/desktop-dev.sh` creates the worktree and installs deps there, honouring `-bfe` and `-r`. |
 
 ## Examples
 
