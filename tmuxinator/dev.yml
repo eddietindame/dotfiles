@@ -66,17 +66,34 @@
   be_slug = backend_branch.gsub('/', '-')
   web_branch = opts[:web] == :default ? frontend_branch : opts[:web]
   web_slug = web_branch&.gsub('/', '-')
-  frontend_root = "~/Documents/bertie/bertie-desktop/#{fe_slug}"
-  backend_root = "~/Documents/bertie/bertie-backend/#{be_slug}"
-  packages_root = "~/Documents/bertie/bertie-packages/#{fe_slug}"
-  web_root = web_branch ? "~/Documents/bertie/bertie-web/#{web_slug}" : nil
-  auth_root = "~/Documents/bertie/bertie-auth/ba-stg"
+  # Absolute, not "~/...": on_project_start interpolates these into quoted shell
+  # words, where a tilde is not expanded. That silently wrote the generated .env
+  # files into a literal "~" directory under tmuxinator's cwd instead of the
+  # worktrees, so the backend never saw its POSTGRES_PORT/BACKEND_PORT.
+  bertie_root = File.expand_path("~/Documents/bertie")
+  frontend_root = "#{bertie_root}/bertie-desktop/#{fe_slug}"
+  backend_root = "#{bertie_root}/bertie-backend/#{be_slug}"
+  packages_root = "#{bertie_root}/bertie-packages/#{fe_slug}"
+  web_root = web_branch ? "#{bertie_root}/bertie-web/#{web_slug}" : nil
+
+  # Find each repo's base checkout rather than hardcoding a folder name. The
+  # base clone has .git as a *directory*; linked worktrees have .git as a file
+  # pointing back at it, so this picks the clone whatever it is called.
+  base_of = lambda do |repo|
+    found = Dir.glob("#{bertie_root}/#{repo}/*").find do |p|
+      File.directory?(File.join(p, ".git"))
+    end
+    raise "no base checkout found in #{bertie_root}/#{repo} — clone it first" if found.nil?
+    found
+  end
+
+  auth_root = base_of.call("bertie-auth")
   auth_port = 3000
   auth_url = "http://localhost:#{auth_port}"
-  frontend_main = "~/Documents/bertie/bertie-desktop/bdesk"
-  backend_main = "~/Documents/bertie/bertie-backend/bb-master"
-  packages_main = "~/Documents/bertie/bertie-packages/bp-main"
-  web_main = "~/Documents/bertie/bertie-web/bw-staging"
+  frontend_main = base_of.call("bertie-desktop")
+  backend_main = base_of.call("bertie-backend")
+  packages_main = base_of.call("bertie-packages")
+  web_main = web_branch ? base_of.call("bertie-web") : nil
 %>
 
 name: <%= frontend_branch %>
