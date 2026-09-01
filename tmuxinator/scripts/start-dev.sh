@@ -69,6 +69,26 @@ frontend_root="$REPO_ROOT/bertie-desktop/$fe_slug"
 backend_root="$REPO_ROOT/bertie-backend/$be_slug"
 packages_root="$REPO_ROOT/bertie-packages/$fe_slug"
 
+# ~~~ preflight: the repos have to be cloned before any of this makes sense ~~~
+# ensure-worktree.sh checks this too, but tmuxinator would already have built a
+# session by then. Check up front so nothing is created on a broken setup, and
+# report every missing repo at once rather than one per re-run.
+if ! $herdr_only; then
+  missing_repos=()
+  for main in "$REPO_ROOT/bertie-desktop/bdesk" \
+              "$REPO_ROOT/bertie-backend/bb-master" \
+              "$REPO_ROOT/bertie-packages/bp-main" \
+              "$REPO_ROOT/bertie-auth/ba-stg"; do
+    git -C "$main" rev-parse --git-dir >/dev/null 2>&1 || missing_repos+=("$main")
+  done
+  if [ ${#missing_repos[@]} -gt 0 ]; then
+    echo "start-dev: these repos are missing or aren't git checkouts:" >&2
+    printf '  %s\n' "${missing_repos[@]}" >&2
+    echo "Clone them before starting a dev environment." >&2
+    exit 1
+  fi
+fi
+
 # ~~~ tmux side: unchanged, just detached so we can build the herdr space ~~~
 if ! $herdr_only; then
   echo "$(date '+%Y-%m-%d %H:%M') tmuxinator start dev ${forward[*]}" >>"$HOME/.tmuxinator_log"
@@ -115,9 +135,12 @@ add_agent_tab() { # <workspace_id> <label> <cwd>
 build_herdr_space() {
   local existing ws_json ws pane missing=false d
 
+  # A directory is not enough: on_project_start's `mkdir -p .../tmp` creates
+  # these paths even when the worktree step failed, so an empty non-repo folder
+  # would pass a -d test and get agents started in it.
   for d in "$backend_root" "$frontend_root" "$packages_root"; do
-    if [ ! -d "$d" ]; then
-      warn "herdr: $d does not exist yet"
+    if ! git -C "$d" rev-parse --git-dir >/dev/null 2>&1; then
+      warn "herdr: $d is not a git worktree"
       missing=true
     fi
   done
@@ -128,7 +151,7 @@ build_herdr_space() {
 
   existing=$(herdr workspace list \
              | jq -r --arg l "$fe_branch" '.result.workspaces[] | select(.label == $l) | .workspace_id' \
-             | head -1)
+             | awk 'NR==1')
   if [ -n "$existing" ]; then
     say "herdr: space '$fe_branch' already exists ($existing) — not touching it"
     return 0
@@ -148,7 +171,12 @@ build_herdr_space() {
 }
 
 if ! $skip_herdr; then
-  if herdr status server 2>/dev/null | grep -q '^status: running'; then
+  # No pipeline here on purpose: under `set -o pipefail`, `herdr status | grep -q`
+  # reports failure whenever grep matches the first line and exits, because the
+  # closed pipe kills herdr with SIGPIPE. That silently skipped the whole herdr
+  # half whenever the server *was* running.
+  server_status=$(herdr status server 2>/dev/null || true)
+  if [[ "$server_status" == *"status: running"* ]]; then
     build_herdr_space || true
   else
     warn "herdr: server not running — no space created. Open herdr, then run:"
