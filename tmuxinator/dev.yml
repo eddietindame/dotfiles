@@ -49,6 +49,8 @@
       opts[:rebase] = true; i += 1
     when '--desktop-local', '-l'
       opts[:desktop_local] = true; i += 1
+    when '--claude', '-c'
+      opts[:claude] = true; i += 1
     else
       positional << @args[i]; i += 1
     end
@@ -68,6 +70,7 @@
   # appear on the remote's localhost at the same ports, so the app's .env needs
   # no changes. Requires a checkout with node_modules over there: better-sqlite3
   # is rebuilt per platform, so the tree cannot be shared.
+  claude_panes = opts[:claude] ? true : false
   desktop_local = opts[:desktop_local] ? true : false
   desktop_host = nil
   if desktop_local
@@ -142,15 +145,17 @@ windows:
       layout: even-horizontal
       panes:
         - nvim
-        - claude
+<% if claude_panes %>        - claude
+<% end %>
 
   - bd:
       root: <%= frontend_root %>
       layout: even-horizontal
       panes:
-        - nvim
 <% if desktop_local %>        - ssh -R <%= backend_port %>:localhost:<%= backend_port %> -R <%= postgres_port %>:localhost:<%= postgres_port %> -R <%= auth_port %>:localhost:<%= auth_port %> <%= desktop_host %> '~/.config/tmuxinator/scripts/desktop-dev.sh "<%= frontend_branch %>"<%= base_fe ? " \"#{base_fe}\"" : "" %><%= rebase.empty? ? "" : " --rebase" %>'
-<% end %>        - claude
+<% else %>        - nvim
+<% if claude_panes %>        - claude
+<% end %><% end %>
 
   - bds:
       root: <%= frontend_root %>
@@ -173,14 +178,14 @@ windows:
       layout: even-horizontal
       panes:
         - nvim
-        - npm i && claude
+        - npm i<%= claude_panes ? " && claude" : "" %>
 
 <% if web_branch %>  - bw:
       root: <%= web_root %>
       layout: even-horizontal
       panes:
         - nvim
-        - claude
-        - npm i
+<% if claude_panes %>        - claude
+<% end %>        - npm i
 <% end %>
 
