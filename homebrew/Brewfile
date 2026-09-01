@@ -24,6 +24,15 @@ brew "mosh"
 # login (`sudo tailscaled install-system-daemon`), which a headless box needs.
 # Do not also install `cask "tailscale"` — the variants conflict.
 brew "tailscale"
+# Colima rather than the docker-desktop cask, for the same reason as tailscale:
+# Desktop is a GUI app needing a user session, which a headless box never has.
+# `docker` here is the CLI client only; colima supplies the daemon in a Lima VM.
+# Compose is a CLI plugin — it needs cliPluginsExtraDirs in ~/.docker/config.json
+# pointing at /opt/homebrew/lib/docker/cli-plugins, or `docker compose` won't
+# find it. Colima does not survive a reboot unattended: `colima start` after.
+brew "colima"
+brew "docker"
+brew "docker-compose"
 
 cask "ghostty"
 cask "claude-code"
