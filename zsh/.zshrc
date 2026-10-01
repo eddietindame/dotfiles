@@ -168,6 +168,24 @@ cleanup-worktrees() {
     fi
   fi
 
+  # Kill the tmux session too, for the same reason the herdr space goes first:
+  # its panes sit in the directories about to be deleted, and a leftover session
+  # also makes `tmuxinator start` exit 1 on the next start-dev. start-dev names
+  # the session after the frontend branch, with dots-as-underscores as fallback.
+  local tsession
+  for tsession in "$branch" "${branch//./_}"; do
+    tmux has-session -t "=$tsession" 2>/dev/null || continue
+    if [[ -n "${TMUX:-}" && "$(tmux display-message -p '#S')" == "$tsession" ]]; then
+      # Killing the session you are sitting in would take this shell with it.
+      echo "Not killing tmux session '$tsession' — you are inside it." >&2
+      echo "  switch away, then: tmux kill-session -t '=$tsession'" >&2
+    else
+      echo "Killing tmux session '$tsession'"
+      tmux kill-session -t "=$tsession"
+    fi
+    break
+  done
+
   # Repos live at <root>/<repo>/<checkout>, so a plain */ from the root finds
   # only the repo folders, which aren't checkouts themselves. Accept either
   # level: use */ when it is a checkout, otherwise look inside it.
