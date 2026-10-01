@@ -96,7 +96,25 @@ fi
 # ~~~ tmux side: unchanged, just detached so we can build the herdr space ~~~
 if ! $herdr_only; then
   echo "$(date '+%Y-%m-%d %H:%M') tmuxinator start dev ${forward[*]}" >>"$HOME/.tmuxinator_log"
-  tmuxinator start dev "${forward[@]}" --no-attach
+  # tmuxinator exits 1, with no output, when the session already exists. Under
+  # `set -e` that killed the script right here — after the log line above but
+  # before the herdr half and before say()/warn() are even defined, so it
+  # failed completely silently. The effect was that cleanup-worktrees followed
+  # by a plain re-run never rebuilt the herdr space, because the tmux session
+  # from the first run was still alive.
+  #
+  # Only fatal if no session actually materialised; an existing one is fine.
+  tmux_rc=0
+  tmuxinator start dev "${forward[@]}" --no-attach || tmux_rc=$?
+  if [ "$tmux_rc" -ne 0 ]; then
+    if tmux has-session -t "=$fe_branch" 2>/dev/null ||
+       tmux has-session -t "=${fe_branch//./_}" 2>/dev/null; then
+      echo "start-dev: tmux session for '$fe_branch' already exists — reusing it"
+    else
+      echo "start-dev: tmuxinator failed (exit $tmux_rc) and no session exists" >&2
+      exit "$tmux_rc"
+    fi
+  fi
 fi
 
 # ~~~ herdr side: one tab per agent window ~~~
