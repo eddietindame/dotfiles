@@ -186,8 +186,11 @@ cleanup-worktrees() {
     fi
   done
 
-  local worktree found=0
+  # Discover everything first, then remove. Collecting the list up front is what
+  # makes the removals safe to parallelise.
+  local worktree
   local -A seen
+  local -a wt_dirs wt_paths
   for dir in "${repos[@]}"; do
     [[ -d "$dir" ]] || continue   # may have been removed as a worktree already
     worktree=$(git -C "$dir" worktree list --porcelain |
@@ -195,15 +198,33 @@ cleanup-worktrees() {
     [[ -n "$worktree" ]] || continue
     [[ -n "${seen[$worktree]}" ]] && continue   # same worktree seen via another checkout
     seen[$worktree]=1
-    found=1
-    echo "Removing worktree for '$branch' -> $worktree"
-    git -C "$dir" worktree remove --force "$worktree"
+    wt_dirs+=("$dir")
+    wt_paths+=("$worktree")
   done
 
-  if (( ! found )); then
+  if (( ${#wt_paths} == 0 )); then
     echo "No worktrees for '$branch' found under $PWD"
     return 1
   fi
+
+  # Remove in parallel. Safe because git allows a branch in only one worktree per
+  # repo, so every removal here is a different repo and touches a different .git
+  # dir — they cannot contend for a lock. Worth it because the real cost is
+  # rm -rf over node_modules, several GB per worktree and purely I/O bound.
+  setopt local_options no_monitor   # suppress "[1] 12345" job spam
+  local -a pids
+  local i
+  for i in {1..${#wt_paths}}; do
+    echo "Removing worktree for '$branch' -> ${wt_paths[$i]}"
+    git -C "${wt_dirs[$i]}" worktree remove --force "${wt_paths[$i]}" &
+    pids+=($!)
+  done
+
+  local rc=0
+  for i in {1..${#pids}}; do
+    wait ${pids[$i]} || { echo "  failed: ${wt_paths[$i]}" >&2; rc=1 }
+  done
+  return $rc
 }
 
 # Increase memory for eslint
