@@ -28,12 +28,19 @@ herdr_only=false
 skip_herdr=false
 fe_branch=""
 be_branch=""
+agents_arg=""          # empty means all of them
 forward=()
+
+# Tab order in the space, and the worktree each agent runs in.
+AGENT_ORDER=(bb bd bp)
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --herdr-only) herdr_only=true; shift ;;
     --no-herdr)   skip_herdr=true; shift ;;
+    -a|--agents)
+      # start-dev's own flag, deliberately not forwarded to tmuxinator
+      agents_arg="$2"; shift 2 ;;
     -be|--backend)
       be_branch="$2"; forward+=("$1" "$2"); shift 2 ;;
     -d|--docker|-b|--base|-bfe|--base-fe|-bbe|--base-be)
@@ -48,13 +55,17 @@ done
 
 if [ -z "$fe_branch" ]; then
   cat >&2 <<USAGE
-usage: $(basename "$0") <branch> [-be BRANCH] [-d N] [-b BASE] [-bfe BASE] [-bbe BASE] [-r] [-c] [-l]
-       $(basename "$0") --herdr-only <branch> [-be BRANCH]
+usage: $(basename "$0") <branch> [-be BRANCH] [-d N] [-b BASE] [-bfe BASE] [-bbe BASE] [-r] [-c] [-l] [-a LIST]
+       $(basename "$0") --herdr-only <branch> [-be BRANCH] [-a LIST]
        $(basename "$0") --no-herdr <branch> [...]
 
   -c, --claude    also run claude in tmux's bb/bd/bp windows (default: herdr only)
   --no-herdr      skip the herdr space
   --herdr-only    build only the herdr space, don't touch tmux
+  -a, --agents    comma-separated herdr agents to start: bb, bd, bp
+                  (default: all three; order is always bb,bd,bp)
+                  e.g. -a bb         just the backend agent
+                       -a bb,bp      backend and packages
 
 See ~/.config/tmuxinator/README.md for the dev.yml options.
 USAGE
@@ -68,6 +79,40 @@ be_slug="${be_branch//\//-}"
 frontend_root="$REPO_ROOT/bertie-desktop/$fe_slug"
 backend_root="$REPO_ROOT/bertie-backend/$be_slug"
 packages_root="$REPO_ROOT/bertie-packages/$fe_slug"
+
+agent_root() {
+  case "$1" in
+    bb) printf '%s' "$backend_root" ;;
+    bd) printf '%s' "$frontend_root" ;;
+    bp) printf '%s' "$packages_root" ;;
+  esac
+}
+
+# Resolve --agents into AGENTS, deduped and in AGENT_ORDER regardless of the
+# order given, so the tabs always read bb, bd, bp.
+AGENTS=()
+if [ -z "$agents_arg" ]; then
+  AGENTS=("${AGENT_ORDER[@]}")
+else
+  IFS=',' read -r -a _requested <<<"$agents_arg"
+  for _a in "${_requested[@]}"; do
+    _a="${_a//[[:space:]]/}"
+    [ -z "$_a" ] && continue
+    case "$_a" in
+      bb|bd|bp) ;;
+      *) echo "start-dev: unknown agent '$_a' (expected bb, bd or bp)" >&2; exit 1 ;;
+    esac
+  done
+  for _a in "${AGENT_ORDER[@]}"; do
+    for _r in "${_requested[@]}"; do
+      [ "${_r//[[:space:]]/}" = "$_a" ] && { AGENTS+=("$_a"); break; }
+    done
+  done
+  if [ ${#AGENTS[@]} -eq 0 ]; then
+    echo "start-dev: --agents was given but named none of bb, bd, bp" >&2
+    exit 1
+  fi
+fi
 
 # ~~~ preflight: the repos have to be cloned before any of this makes sense ~~~
 # ensure-worktree.sh checks this too, but tmuxinator would already have built a
@@ -155,12 +200,16 @@ add_agent_tab() { # <workspace_id> <label> <cwd>
 }
 
 build_herdr_space() {
-  local existing ws_json ws pane missing=false d
+  local existing ws_json ws pane missing=false d a first
 
+  # Only the worktrees we are actually going to use: checking all three would
+  # refuse `-a bb` just because an unrelated repo was not checked out.
+  #
   # A directory is not enough: on_project_start's `mkdir -p .../tmp` creates
   # these paths even when the worktree step failed, so an empty non-repo folder
   # would pass a -d test and get agents started in it.
-  for d in "$backend_root" "$frontend_root" "$packages_root"; do
+  for a in "${AGENTS[@]}"; do
+    d=$(agent_root "$a")
     if ! git -C "$d" rev-parse --git-dir >/dev/null 2>&1; then
       warn "herdr: $d is not a git worktree"
       missing=true
@@ -179,17 +228,23 @@ build_herdr_space() {
     return 0
   fi
 
-  # workspace create makes the space, its first tab, and that tab's pane
-  ws_json=$(herdr workspace create --cwd "$backend_root" --label "$fe_branch" --no-focus)
+  # workspace create makes the space, its first tab, and that tab's pane, so the
+  # first selected agent lands in the root tab and the rest get tabs added.
+  first="${AGENTS[0]}"
+  ws_json=$(herdr workspace create --cwd "$(agent_root "$first")" --label "$fe_branch" --no-focus)
   ws=$(json_get .result.workspace.workspace_id <<<"$ws_json")
   pane=$(json_get .result.root_pane.pane_id <<<"$ws_json")
-  herdr tab rename "$(json_get .result.tab.tab_id <<<"$ws_json")" bb >/dev/null
-  start_agent "$pane" bb
+  herdr tab rename "$(json_get .result.tab.tab_id <<<"$ws_json")" "$first" >/dev/null
+  start_agent "$pane" "$first"
 
-  add_agent_tab "$ws" bd "$frontend_root"
-  add_agent_tab "$ws" bp "$packages_root"
+  for a in "${AGENTS[@]:1}"; do
+    add_agent_tab "$ws" "$a" "$(agent_root "$a")"
+  done
 
-  say "herdr: space '$fe_branch' ($ws) ready — bb, bd, bp"
+  # ${AGENTS[*]} would join on IFS (a space); keep the original comma phrasing.
+  local list
+  printf -v list '%s, ' "${AGENTS[@]}"
+  say "herdr: space '$fe_branch' ($ws) ready — ${list%, }"
 }
 
 if ! $skip_herdr; then
