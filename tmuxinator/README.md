@@ -37,6 +37,7 @@ Run tmux and herdr in separate Ghostty windows.
 |------|-------------|
 | `--no-herdr` | Skip the herdr space entirely; behaves like a plain `tmuxinator start`. |
 | `--herdr-only` | Build only the herdr space (worktrees must already exist). Doesn't touch tmux. |
+| `-a`, `--agents` | Comma-separated agents to start in herdr: `bb`, `bd`, `bp`. Defaults to all three. Order given doesn't matter — tabs are always `bb`, `bd`, `bp` — and duplicates are ignored. Only the worktrees for the agents you ask for are required, so `-a bb` works without the others checked out. |
 
 The two halves are independent — `-c` controls tmux's claude panes, `--no-herdr`
 / `--herdr-only` control the herdr space:
@@ -47,6 +48,14 @@ scripts/start-dev.sh feat/x -c             # claude in both
 scripts/start-dev.sh feat/x -c --no-herdr  # claude in tmux only (original setup)
 scripts/start-dev.sh feat/x --no-herdr     # no claude anywhere
 scripts/start-dev.sh --herdr-only feat/x   # rebuild just the herdr space
+```
+
+Pick which agents the space gets with `-a` (default is all three):
+
+```sh
+scripts/start-dev.sh feat/x -a bb                 # backend agent only
+scripts/start-dev.sh feat/x -a bb,bp              # backend and packages
+scripts/start-dev.sh --herdr-only feat/x -a bd    # rebuild the space with just bd
 ```
 
 ## Examples
