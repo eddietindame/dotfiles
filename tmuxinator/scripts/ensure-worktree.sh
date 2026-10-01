@@ -77,16 +77,44 @@ git fetch --quiet
 # Check if branch exists (local or remote)
 if git show-ref --verify --quiet "refs/heads/$branch" || \
    git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
-    # Branch exists, create worktree for it
+    # Branch exists, create worktree for it. If it exists locally and is behind
+    # its upstream, say so — git checks out the local ref as-is, and silently
+    # resuming on stale code is the thing this script is meant to prevent.
+    if git show-ref --verify --quiet "refs/heads/$branch"; then
+        behind=$(git rev-list --count "$branch..$branch@{upstream}" 2>/dev/null || echo 0)
+        if [ "$behind" -gt 0 ]; then
+            echo "ensure-worktree: $branch is $behind commit(s) behind its upstream" >&2
+            echo "  worktree uses the local ref as-is; pass --rebase to move it." >&2
+        fi
+    fi
     git worktree add "$target_path" "$branch"
 else
-    # Branch doesn't exist, create new branch and worktree
-    if [ -n "$base_branch" ] && \
-       git show-ref --verify --quiet "refs/remotes/origin/$base_branch"; then
-        git worktree add -b "$branch" "$target_path" "origin/$base_branch"
+    # New branch: always cut it from a freshly fetched REMOTE ref, never from
+    # this checkout's HEAD. `git fetch` advances refs/remotes/* but leaves the
+    # base clone's local branch where it was, and these base clones sit far
+    # behind — staging was 1202 commits stale when this was written.
+    if [ -n "$base_branch" ]; then
+        if ! git show-ref --verify --quiet "refs/remotes/origin/$base_branch"; then
+            echo "ensure-worktree: no origin/$base_branch in $main_worktree" >&2
+            echo "  refusing to fall back to a stale local HEAD — check the name." >&2
+            exit 1
+        fi
+        base_ref="origin/$base_branch"
     else
-        git worktree add -b "$branch" "$target_path"
+        # Default to the remote counterpart of whatever the base clone tracks
+        # (staging, main, ...), then origin's default branch.
+        base_ref=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null) || base_ref=""
+        if [ -z "$base_ref" ]; then
+            base_ref=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null) || base_ref=""
+        fi
+        if [ -z "$base_ref" ]; then
+            echo "ensure-worktree: cannot resolve a remote base branch in $main_worktree" >&2
+            echo "  set one with 'git remote set-head origin -a', or pass -b/-bfe/-bbe." >&2
+            exit 1
+        fi
     fi
+    echo "ensure-worktree: $branch off $base_ref ($(git rev-parse --short "$base_ref"))"
+    git worktree add -b "$branch" "$target_path" "$base_ref"
 fi
 
 # Copy .env from main worktree if it exists
