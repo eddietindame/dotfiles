@@ -171,13 +171,16 @@ cleanup-worktrees() {
   # Repos live at <root>/<repo>/<checkout>, so a plain */ from the root finds
   # only the repo folders, which aren't checkouts themselves. Accept either
   # level: use */ when it is a checkout, otherwise look inside it.
+  # (N) is nullglob for that pattern: zsh treats an unmatched glob as a fatal
+  # error, so a sibling with no subdirectories (dist-electron) aborted the whole
+  # function before it removed anything.
   local -a repos
   local dir sub
-  for dir in */; do
+  for dir in */(N); do
     if [[ -d "$dir/.git" || -f "$dir/.git" ]]; then
       repos+=("$dir")
     else
-      for sub in "$dir"*/; do
+      for sub in "$dir"*/(N); do
         [[ -d "$sub/.git" || -f "$sub/.git" ]] && repos+=("$sub")
       done
     fi
