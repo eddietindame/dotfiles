@@ -128,6 +128,10 @@ bertie-tunnel() {
 # Also symlinked at ~/bin/start-dev; this alias is what survives a fresh clone.
 alias start-dev="$HOME/.config/tmuxinator/scripts/start-dev.sh"
 
+# OpenRig teams on their own worktrees under ~/Documents/bertie-rigs.
+alias start-rig="$HOME/.config/openrig/scripts/start-rig.sh"
+alias cleanup-rig="$HOME/.config/openrig/scripts/cleanup-rig.sh"
+
 # Always upgrade claude-code
 alias claude="brew upgrade claude-code && claude"
 

@@ -32,6 +32,10 @@
 !tmux/**
 tmux/plugins/
 
+# OpenRig - start-rig / cleanup-rig and their templates
+!openrig/
+!openrig/**
+
 # Neovim
 !nvim/
 !nvim/**
