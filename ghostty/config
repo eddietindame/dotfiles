@@ -54,8 +54,9 @@ window-padding-balance = true
 
 # theme = Catppuccin Mocha
 # background-opacity = 0.5
-background-opacity = 0.9
-background-blur = true
+# background-opacity = 0.9
+# background-blur = true
+background = #000000
 # window-decoration = none
 macos-titlebar-style = hidden
 # Send Option as Alt so alt+ chords reach the terminal (herdr focus_agent = prefix+alt+1..9).
@@ -92,3 +93,9 @@ shell-integration-features = cursor,no-sudo,title,no-ssh-env,ssh-terminfo,path
 # keybind = cmd+shift+[=text:\x1b{
 # keybind = cmd+shift+]=text:\x1b}
 # keybind = cmd+g=text:\x1bg
+
+# Audible bell: tmux/scripts/agent-notify.sh rings it when an agent finishes
+# or needs input (it is the one signal that survives mosh). Default is silent.
+bell-features = audio,attention,title,no-border
+bell-audio-path = /System/Library/Sounds/Glass.aiff
+bell-audio-volume = 0.7
