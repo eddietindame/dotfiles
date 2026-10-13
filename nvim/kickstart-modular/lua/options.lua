@@ -22,6 +22,19 @@ vim.schedule(function()
   vim.o.clipboard = 'unnamedplus'
 end)
 
+-- Over ssh nvim would still find pbcopy and copy to the remote Mac's clipboard,
+-- so copy over OSC 52 instead (tmux forwards it to the local terminal). Paste
+-- from nvim's own register, since an OSC 52 read makes the terminal prompt.
+if vim.env.SSH_CONNECTION then
+  local osc52 = require 'vim.ui.clipboard.osc52'
+  local function paste() return { vim.fn.split(vim.fn.getreg '', '\n'), vim.fn.getregtype '' } end
+  vim.g.clipboard = {
+    name = 'OSC 52',
+    copy = { ['+'] = osc52.copy '+', ['*'] = osc52.copy '*' },
+    paste = { ['+'] = paste, ['*'] = paste },
+  }
+end
+
 -- Enable break indent
 vim.o.breakindent = true
 
