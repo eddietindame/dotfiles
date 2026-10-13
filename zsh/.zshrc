@@ -2,7 +2,7 @@
 export XDG_CONFIG_HOME="$HOME/.config"
 
 # Path
-export PATH="$HOME/bin:$PATH"
+export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 GOPATH=$HOME/go PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 
 # Volta (node/npm/npx/pnpm/yarn shims) is set up in .zshenv so non-interactive
