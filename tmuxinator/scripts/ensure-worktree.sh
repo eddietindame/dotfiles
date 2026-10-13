@@ -114,7 +114,10 @@ else
         fi
     fi
     echo "ensure-worktree: $branch off $base_ref ($(git rev-parse --short "$base_ref"))"
-    git worktree add -b "$branch" "$target_path" "$base_ref"
+    # --no-track: otherwise git makes $base_ref the new branch's upstream, so
+    # status reads "ahead of origin/staging", a pull merges staging in, and a
+    # push targets the base. The first `git push -u origin HEAD` sets it right.
+    git worktree add --no-track -b "$branch" "$target_path" "$base_ref"
 fi
 
 # Copy .env from main worktree if it exists
