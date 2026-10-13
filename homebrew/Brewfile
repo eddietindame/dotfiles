@@ -1,5 +1,6 @@
 tap "felixkratz/formulae", trusted: true
 tap "nikitabobko/tap", trusted: true
+tap "hashicorp/tap", trusted: true
 
 brew "git"
 brew "gh"
@@ -9,6 +10,10 @@ brew "nvim"
 brew "posting"
 brew "tmux"
 brew "tmuxinator"
+# tmux plugin deps. urlview backs tmux-urlview; rust supplies the cargo that
+# tmux-thumbs compiles itself with at TPM install time (it ships no binary).
+brew "urlview"
+brew "rust"
 brew "sketchybar"
 brew "zoxide"
 brew "fzf"
@@ -33,9 +38,14 @@ brew "tailscale"
 brew "colima"
 brew "docker"
 brew "docker-compose"
+brew "killport"
+# From HashiCorp's tap: homebrew-core froze terraform at 1.5.7 after the BUSL
+# licence change, and bertie-terraform needs newer.
+brew "hashicorp/tap/terraform"
 
 cask "ghostty"
 cask "claude-code"
+cask "codex"
 cask "aerospace"
 cask "font-sketchybar-app-font"
 cask "raycast"
