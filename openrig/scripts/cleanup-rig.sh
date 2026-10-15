@@ -28,8 +28,8 @@ branch="" repo="" name="" drop_feature=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    -r|--repo)  repo=$(resolve_repo "$2") || die "cleanup-rig: unknown repo '$2'"; shift 2 ;;
-    --name)     name="$2"; shift 2 ;;
+    -r|--repo)  need_value "$@"; repo=$(resolve_repo "$2") || die "cleanup-rig: unknown repo '$2'"; shift 2 ;;
+    --name)     need_value "$@"; name="$2"; shift 2 ;;
     --branches) drop_feature=true; shift ;;
     -h|--help)  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)         die "cleanup-rig: unknown option $1" ;;

@@ -53,13 +53,13 @@ policy="" install=true plan=false from_lead=false edit_brief=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    -r|--repo)     repo_args+=("$2"); shift 2 ;;
-    -n|--builders) builders="$2"; builders_given=true; shift 2 ;;
-    -b|--base)     base="$2"; shift 2 ;;
-    --brief)       brief_src="$2"; shift 2 ;;
+    -r|--repo)     need_value "$@"; repo_args+=("$2"); shift 2 ;;
+    -n|--builders) need_value "$@"; builders="$2"; builders_given=true; shift 2 ;;
+    -b|--base)     need_value "$@"; base="$2"; shift 2 ;;
+    --brief)       need_value "$@"; brief_src="$2"; shift 2 ;;
     -e|--edit-brief) edit_brief=true; shift ;;
-    --name)        rig_name="$2"; shift 2 ;;
-    --policy)      policy="$2"; shift 2 ;;
+    --name)        need_value "$@"; rig_name="$2"; shift 2 ;;
+    --policy)      need_value "$@"; policy="$2"; shift 2 ;;
     --no-install)  install=false; shift ;;
     --plan)        plan=true; shift ;;
     --from-lead)   from_lead=true; shift ;;
@@ -238,7 +238,8 @@ fi
 if $edit_brief && ! $from_lead; then
   if [ -t 0 ] && [ -t 1 ]; then
     [ ${#pids[@]} -eq 0 ] || say "start-rig: installs carry on in the background; the rig launches when you quit nvim"
-    nvim "$live_brief" || warn "start-rig: nvim exited with an error; carrying on with $live_brief as it is"
+    # Scripts don't see the zsh alias, which is what picks the kickstart config.
+    NVIM_APPNAME="${NVIM_APPNAME:-nvim/kickstart-modular}" ${EDITOR:-nvim} "$live_brief" || warn "start-rig: nvim exited with an error; carrying on with $live_brief as it is"
   else
     warn "start-rig: -e needs a terminal; not opening the brief"
   fi
