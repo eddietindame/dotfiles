@@ -32,6 +32,13 @@ say()  { printf '%s\n' "$*"; }
 warn() { printf '%s\n' "$*" >&2; }
 die()  { warn "$*"; exit 1; }
 
+# For option parsing: the option in $1 must be followed by a value, not by
+# nothing (set -u would die on $2) or by the next option.
+need_value() { # "$@" of the caller
+  [ $# -ge 2 ] && [ -n "$2" ] && [ "${2#-}" = "$2" ] ||
+    die "$(basename "$0" .sh): $1 needs a value"
+}
+
 # -r accepts the repo name or its prefix.
 resolve_repo() {
   case "$1" in
