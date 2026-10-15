@@ -53,6 +53,12 @@ conversation, so anything not written there is lost.
   dependencies, which takes several minutes, so run it in the background. It
   prints what changed: record it in `BRIEF.md` and tell the builders it
   affects. Never create worktrees or clones any other way.
+- A seat can get stuck on a permission prompt that only the human can answer,
+  and it can't tell you. Check `rig ps --nodes --rig @@RIG@@` after you assign
+  a slice and whenever a seat has been quiet for a while. A seat showing
+  `needs-input` is waiting on the human: tell them which seat, and what it is
+  asking (`rig capture <session>` shows its screen). Never answer a seat's
+  prompt yourself.
 - Questions that change scope go to the human, not a guess. When the answer
   changes the brief, update the brief and tell the builders it affects.
 

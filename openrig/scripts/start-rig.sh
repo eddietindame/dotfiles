@@ -19,8 +19,10 @@
 #                  Installs run in the background meanwhile. Works with --brief
 #                  (edit the seeded copy) and on an existing rig.
 #   --name RIG     rig name, when the one derived from the branch is too long
-#   --policy P     permission_policy for every seat, e.g. builtin:auto
-#                  (default: OpenRig's team launch default)
+#   --policy P     permission_policy for every seat (default builtin:auto: Claude
+#                  seats launch in auto mode, so builders don't sit on a
+#                  permission prompt nobody sees; the codex reviewer is at the
+#                  floor either way). See `rig policy list`.
 #   --no-install   skip npm/pnpm install in new worktrees
 #   --plan         set everything up, then `rig up --plan` instead of launching
 #   -s, --seat     existing rig only: also give these builders a worktree of the
@@ -55,7 +57,7 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 branch="" repo_args=() added=() builders=2 builders_given=false base="" brief_src="" rig_name=""
-policy="" install=true plan=false from_lead=false edit_brief=false seat_args=""
+policy="builtin:auto" install=true plan=false from_lead=false edit_brief=false seat_args=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
