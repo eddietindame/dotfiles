@@ -5,18 +5,19 @@ brief, `@@LEAD_DIR@@/BRIEF.md`, which the lead keeps current.
 
 ## Who is where
 
-Each seat works in its own folder, which holds one worktree per repo. The
-branch is the same in every repo.
+Each seat works in its own folder, which holds one worktree per repo it has.
+The branch is the same in every repo. Builders don't all have every repo: the
+table says who has which.
 
-| Seat | Address | Folder | Branch |
-|---|---|---|---|
+| Seat | Address | Folder | Branch | Repos |
+|---|---|---|---|---|
 @@SEAT_TABLE@@
 
 Each repo's worktrees share one git repository, so every branch above is
 visible from every seat. Work only inside your own folder, and read each
 repo's AGENTS.md / CLAUDE.md before changing anything in it.
-If a slice needs a repo that isn't in your folder, ask the lead: it adds repos
-to every seat at once. Never create a worktree or clone yourself.
+If a slice needs a repo that isn't in your folder, ask the lead: it adds it to
+your folder. Never create a worktree or clone yourself.
 
 @@LINK_NOTE@@
 

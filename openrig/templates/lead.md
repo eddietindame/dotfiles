@@ -45,11 +45,14 @@ conversation, so anything not written there is lost.
   and tell the builder. Then tell the builder to `git rebase @@BRANCH@@` in
   each repo before its next slice.
 - If the work needs a repo the rig doesn't have, add it yourself from your
-  folder: `@@ADD_REPO@@ <repo>` (bd, bp, bw, bb, ba, bt). It gives every seat a
-  worktree on the rig's branches and installs dependencies, which takes
-  several minutes, so run it in the background. It prints what changed: record
-  it in `BRIEF.md` and tell the builders who need it. Never create worktrees
-  or clones any other way.
+  folder: `@@ADD_REPO@@ <repo>` (bd, bp, bw, bb, ba, bt). That gives your
+  folder a worktree on `@@BRANCH@@`; builders don't get one. Before you assign
+  a slice in that repo, give the builder it goes to a worktree too:
+  `@@ADD_REPO@@ <repo> --seat bN` (`b1,b2` or `all` for several). The culture
+  file's seat table shows who has which repo. Each new worktree installs
+  dependencies, which takes several minutes, so run it in the background. It
+  prints what changed: record it in `BRIEF.md` and tell the builders it
+  affects. Never create worktrees or clones any other way.
 - Questions that change scope go to the human, not a guess. When the answer
   changes the brief, update the brief and tell the builders it affects.
 
