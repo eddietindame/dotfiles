@@ -251,7 +251,7 @@ elif [ -n "$brief_src" ]; then
 fi
 
 # ~~~ dependencies, in parallel: node_modules is the slow part ~~~
-pids=() logs=()
+pids=() logs=() wts=() cmds=()
 if $install && [ ${#new_wts[@]} -gt 0 ]; then
   for wt in "${new_wts[@]}"; do
     [ -d "$wt/node_modules" ] && continue
@@ -262,7 +262,7 @@ if $install && [ ${#new_wts[@]} -gt 0 ]; then
     log="$spec_dir/logs/install-$seat-$(basename "$wt").log"
     say "start-rig: $cmd in $seat/$(basename "$wt") (log: $log)"
     (cd "$wt" && $cmd) >"$log" 2>&1 &
-    pids+=($!) logs+=("$log")
+    pids+=($!) logs+=("$log") wts+=("$wt") cmds+=("$cmd")
   done
 fi
 
@@ -276,9 +276,16 @@ if $edit_brief && ! $from_lead; then
   fi
 fi
 
+# A failed install is retried once on its own: the worktrees of one repo share
+# its .git/config, and a prepare script that writes to it (husky's hooksPath in
+# packages) fails when another seat's install holds the lock.
 failed=false
 [ ${#pids[@]} -gt 0 ] && for i in "${!pids[@]}"; do
-  wait "${pids[$i]}" || { warn "start-rig: install failed, see ${logs[$i]}"; failed=true; }
+  wait "${pids[$i]}" && continue
+  wt=${wts[$i]}
+  say "start-rig: install failed in $(basename "$(dirname "$wt")")/$(basename "$wt"); retrying it alone"
+  (cd "$wt" && ${cmds[$i]}) >>"${logs[$i]}" 2>&1 ||
+    { warn "start-rig: install failed, see ${logs[$i]}"; failed=true; }
 done
 $failed && die "start-rig: fix the install, then re-run (worktrees are kept)"
 
