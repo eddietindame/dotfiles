@@ -5,6 +5,7 @@
 #
 #   start-rig.sh <branch> [-r REPOS] [-n BUILDERS] [-b BASE] [--brief FILE] [-e]
 #                [--name RIG] [--policy POLICY] [--no-install] [--plan]
+#                [-s SEATS]
 #
 #   -r, --repo     comma-separated repos, by name or prefix: bd, bp, bw, bb, ba, bt
 #                  (default bd,bp). Every seat gets a worktree of each.
@@ -22,6 +23,8 @@
 #                  (default: OpenRig's team launch default)
 #   --no-install   skip npm/pnpm install in new worktrees
 #   --plan         set everything up, then `rig up --plan` instead of launching
+#   -s, --seat     existing rig only: also give these builders a worktree of the
+#                  -r repos, e.g. -s b1,b2 or -s all (default: the lead only)
 #   --from-lead    used by add-repo.sh: print the news for the lead instead of
 #                  sending it, and leave the rig's running state alone
 #
@@ -35,10 +38,13 @@
 # Safe to re-run: existing worktrees, specs and briefs are left alone, and a rig
 # that already exists is brought back with `rig up <rig> --existing`.
 #
-# Re-running with -r on an existing rig adds those repos to it: a worktree in
-# every seat, the culture and guidance rendered again, and the lead told. Repos
-# are never removed this way; that is cleanup-rig and start again.
-#   start-rig feat/BER-123-thing -r bw
+# The repos a rig starts with go to every seat. Re-running with -r on an
+# existing rig adds repos to the lead's folder only, and the lead decides which
+# builders need them (-s); each addition re-renders the culture and guidance and
+# tells the lead. Repos are never removed this way; that is cleanup-rig and
+# start again.
+#   start-rig feat/BER-123-thing -r bw          lead gets bertie-web
+#   start-rig feat/BER-123-thing -r bw -s b1    and so does b1
 # Undo with cleanup-rig.sh <branch>.
 
 set -euo pipefail
@@ -49,7 +55,7 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 branch="" repo_args=() added=() builders=2 builders_given=false base="" brief_src="" rig_name=""
-policy="" install=true plan=false from_lead=false edit_brief=false
+policy="" install=true plan=false from_lead=false edit_brief=false seat_args=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -62,6 +68,7 @@ while [ $# -gt 0 ]; do
     --policy)      need_value "$@"; policy="$2"; shift 2 ;;
     --no-install)  install=false; shift ;;
     --plan)        plan=true; shift ;;
+    -s|--seat)     need_value "$@"; seat_args="$seat_args${seat_args:+,}$2"; shift 2 ;;
     --from-lead)   from_lead=true; shift ;;
     -h|--help)     sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)            die "start-rig: unknown option $1" ;;
@@ -111,14 +118,23 @@ if [ -f "$spec_dir/rig.env" ]; then
   builders="$prev_builders"
   # -r on an existing rig adds repos to it; it never drops one.
   read -r -a prev_repos <<<"$(rig_env_get "$spec_dir/rig.env" REPOS)"
+  # Repos every seat gets: the ones the rig started with. Rigs from before
+  # lead-only additions gave every seat every repo.
+  shared=$(rig_env_get "$spec_dir/rig.env" SHARED_REPOS)
+  read -r -a shared_repos <<<"${shared:-${prev_repos[*]}}"
   wanted=("${repos[@]}")
   repos=("${prev_repos[@]}")
   if $repos_given; then
     for r in "${wanted[@]}"; do
       case " ${prev_repos[*]} " in *" $r "*) ;; *) repos+=("$r") added+=("$r") ;; esac
     done
+  else
+    wanted=()
   fi
 else
+  [ -z "$seat_args" ] || die "start-rig: -s adds repos to builders of an existing rig; a new rig gives every seat every -r repo"
+  shared_repos=("${repos[@]}")
+  wanted=()
   [ ! -e "$rig_dir" ] || die "start-rig: $rig_dir exists but is not a rig from start-rig. Pick another with --name."
   # A rig from before per-rig folders, on the same branch, would be duplicated
   # rather than extended.
@@ -140,13 +156,14 @@ if [ ! -f "$spec_dir/rig.env" ]; then
     echo "RIG=$rig_name"
     echo "BRANCH='$branch'"
     echo "REPOS='${repos[*]}'"
+    echo "SHARED_REPOS='${repos[*]}'"
     echo "BUILDERS=$builders"
     echo "RIG_DIR='$rig_dir'"
   } >"$spec_dir/rig.env"
 fi
 
 if [ ${#added[@]} -gt 0 ]; then
-  say "start-rig: adding ${added[*]} to $rig_name"
+  say "start-rig: adding ${added[*]} to $rig_name (lead only; -s for builders)"
   sed -i '' "s|^REPOS=.*|REPOS='${repos[*]}'|" "$spec_dir/rig.env"
 fi
 
@@ -155,11 +172,24 @@ has_repo() { case " ${repos[*]} " in *" $1 "*) return 0 ;; esac; return 1; }
 seats=(lead)
 i=1
 while [ "$i" -le "$builders" ]; do seats+=("b$i"); i=$((i + 1)); done
-seat_list=""   # where the added repos land, for telling the lead
-for r in "${added[@]-}"; do
-  [ -n "$r" ] || continue
-  for seat in "${seats[@]}"; do seat_list="$seat_list${seat_list:+, }$seat/$r"; done
-done
+# -s: which builders get the -r repos on top of the shared ones.
+target_seats=()
+if [ -n "$seat_args" ]; then
+  [ ${#wanted[@]} -gt 0 ] || die "start-rig: -s needs -r, the repos to give those builders"
+  IFS=',' read -r -a parts <<<"$seat_args"
+  for p in "${parts[@]}"; do
+    p="${p//[[:space:]]/}"
+    case "$p" in
+      '') continue ;;
+      all) target_seats=("${seats[@]:1}"); break ;;
+    esac
+    case " ${seats[*]:1} " in *" $p "*) ;; *) die "start-rig: no builder '$p' in $rig_name (it has ${seats[*]:1})" ;; esac
+    case " ${target_seats[*]-} " in *" $p "*) ;; *) target_seats+=("$p") ;; esac
+  done
+fi
+is_shared() { case " ${shared_repos[*]} " in *" $1 "*) return 0 ;; esac; return 1; }
+is_wanted() { case " ${wanted[*]-} " in *" $1 "*) return 0 ;; esac; return 1; }
+is_target() { case " ${target_seats[*]-} " in *" $1 "*) return 0 ;; esac; return 1; }
 seat_branch() { [ "$1" = lead ] && printf '%s' "$branch" || printf '%s-%s' "$branch" "$1"; }
 
 # ~~~ base clones: their own, cloned from the same remote as the dev base ~~~
@@ -177,7 +207,7 @@ for repo in "${repos[@]}"; do
 done
 
 # ~~~ worktrees: <seat>/<repo> ~~~
-new_wts=()
+new_wts=() seat_added=()   # seat_added: builder worktrees made by this run
 for repo in "${repos[@]}"; do
   base_clone="$BASES_ROOT/$repo"
   # The lead's branch goes through ensure-worktree like start-dev's: resumes an
@@ -191,7 +221,8 @@ for repo in "${repos[@]}"; do
     wt="$rig_dir/$seat/$repo"
     b=$(seat_branch "$seat")
     [ -d "$wt" ] && continue
-    new_wts+=("$wt")
+    is_shared "$repo" || { is_target "$seat" && is_wanted "$repo"; } || continue
+    new_wts+=("$wt") seat_added+=("$seat/$repo")
     mkdir -p "$rig_dir/$seat"
     # Not ensure-worktree: it cuts new branches only from origin/<base>, and the
     # feature branch is local until the human pushes it.
@@ -260,6 +291,7 @@ if has_repo bertie-desktop && has_repo bertie-packages; then
   for seat in "${seats[@]}"; do
     desk="$rig_dir/$seat/bertie-desktop"
     pkgs="$rig_dir/$seat/bertie-packages"
+    [ -d "$desk" ] && [ -d "$pkgs" ] || continue   # a seat given only one of them
     grep -q '"link:ui"' "$desk/package.json" 2>/dev/null || { warn "start-rig: $seat/bertie-desktop has no link:ui script; not linked"; continue; }
     [ -d "$desk/node_modules" ] || { warn "start-rig: $seat/bertie-desktop has no node_modules yet; not linked (re-run without --no-install)"; continue; }
     [ "$(readlink "$desk/node_modules/@bertie-technology/ui" 2>/dev/null)" = "$pkgs/packages/internal/ui" ] && { linked=true; continue; }
@@ -294,7 +326,9 @@ agents="$(dirname "$(dirname "$rig_bin")")/daemon/specs/agents"
 
 # Culture and guidance are rendered again when repos are added; rig.yaml is
 # only ever written once, so a running rig's spec never changes under it.
-if [ ! -f "$spec_dir/rig.yaml" ] || [ ${#added[@]} -gt 0 ]; then
+changed=false
+[ ${#added[@]} -gt 0 ] || [ ${#seat_added[@]} -gt 0 ] && [ -f "$spec_dir/rig.yaml" ] && changed=true
+if [ ! -f "$spec_dir/rig.yaml" ] || $changed; then
   mkdir -p "$spec_dir/guidance"
 
   repo_list=""
@@ -302,13 +336,18 @@ if [ ! -f "$spec_dir/rig.yaml" ] || [ ${#added[@]} -gt 0 ]; then
   builder_list=""
   for seat in "${seats[@]:1}"; do builder_list="$builder_list${builder_list:+, }dev-$seat@$rig_name"; done
 
+  seat_repos() { # <seat>: the repos in its folder, from disk
+    local r out=""
+    for r in "${repos[@]}"; do [ -d "$rig_dir/$1/$r" ] && out="$out${out:+, }$r"; done
+    printf '%s' "${out:-none}"
+  }
   seat_table=""
   for seat in "${seats[@]}"; do
     [ "$seat" = lead ] && addr="orch-lead@$rig_name" || addr="dev-$seat@$rig_name"
-    seat_table="$seat_table| $seat | $addr | $rig_dir/$seat | \`$(seat_branch "$seat")\` |
+    seat_table="$seat_table| $seat | $addr | $rig_dir/$seat | \`$(seat_branch "$seat")\` | $(seat_repos "$seat") |
 "
   done
-  seat_table="$seat_table| r1 (reviewer) | review-r1@$rig_name | $lead_dir (read-only) | — |"
+  seat_table="$seat_table| r1 (reviewer) | review-r1@$rig_name | $lead_dir (read-only) | — | $(seat_repos lead) |"
 
   checks=""
   for repo in "${repos[@]}"; do
@@ -319,7 +358,7 @@ if [ ! -f "$spec_dir/rig.yaml" ] || [ ${#added[@]} -gt 0 ]; then
 }"
 
   link_note=""
-  $linked && link_note="Your \`bertie-desktop\` is linked to your own \`bertie-packages\`
+  $linked && link_note="If your folder has both, your \`bertie-desktop\` is linked to your own \`bertie-packages\`
 (\`node_modules/@bertie-technology/ui\` points at its \`packages/internal/ui\`), so
 a package edit shows up in desktop straight away; restart desktop's dev server
 to pick it up. An \`npm install\` in desktop undoes the link: re-link with
@@ -440,17 +479,32 @@ BRIEF
 
 # ~~~ added repos: the running agents loaded the old culture ~~~
 news=""
-if [ ${#added[@]} -gt 0 ]; then
-  news="start-rig added ${added[*]} to this rig: every seat folder now has a worktree of each ($seat_list), on the same branches as the other repos ($branch for you, $branch-bN for builders)."
-  for r in "${added[@]}"; do news="$news Checks in $r: $(checks_for "$r" | tr -d '\`')."; done
-  $linked && news="$news In every seat, bertie-desktop now uses the bertie-packages next to it for @bertie-technology/ui; restart desktop dev servers to pick it up."
-  news="$news The culture file ($spec_dir/CULTURE.md) is updated. Tell the builders whose slices need it, and update BRIEF.md if this changes the plan."
+if $changed; then
+  if [ ${#added[@]} -gt 0 ]; then
+    list=""
+    for r in "${added[@]}"; do list="$list${list:+, }lead/$r"; done
+    news="start-rig added ${added[*]} to your folder ($list, on $branch)."
+    for r in "${added[@]}"; do news="$news Checks in $r: $(checks_for "$r" | tr -d '\`')."; done
+  fi
+  if [ ${#seat_added[@]} -gt 0 ]; then
+    list=""
+    for w in "${seat_added[@]}"; do list="$list${list:+, }$w on $branch-${w%%/*}"; done
+    news="$news${news:+ }Builder worktrees added: $list. Tell those builders before you assign them work there."
+  fi
+  missing=""
+  for r in "${wanted[@]-}"; do
+    [ -n "$r" ] && ! is_shared "$r" || continue
+    for seat in "${seats[@]:1}"; do [ -d "$rig_dir/$seat/$r" ] || missing="$missing${missing:+, }$seat/$r"; done
+  done
+  [ -z "$missing" ] || news="$news Builders without these yet: $missing. Before assigning a slice that needs one, run \`$OPENRIG_DIR/scripts/add-repo.sh <repo> --seat bN\` from your folder (it installs dependencies: minutes, so in the background)."
+  $linked && [ ${#seat_added[@]} -gt 0 ] && news="$news Seats with both bertie-desktop and bertie-packages have desktop linked to their own packages for @bertie-technology/ui; restart desktop dev servers to pick it up."
+  news="$news The culture file ($spec_dir/CULTURE.md) is updated; its seat table shows who has which repo. Update BRIEF.md if this changes the plan."
 fi
 tell_lead() {
   [ -n "$news" ] || return 0
   if $from_lead; then say ""; say "$news"; return 0; fi
   if rig send "orch-lead@$rig_name" "$news" >/dev/null 2>&1; then
-    say "start-rig: told orch-lead@$rig_name about ${added[*]}"
+    say "start-rig: told orch-lead@$rig_name about the new worktrees"
   else
     warn "start-rig: couldn't reach the lead; tell it yourself:"
     warn "  rig send orch-lead@$rig_name '$news'"
@@ -460,7 +514,7 @@ tell_lead() {
 # ~~~ launch ~~~
 # The lead adding a repo is already running; there is nothing to launch.
 if $from_lead; then
-  [ -n "$news" ] && tell_lead || say "add-repo: nothing to add; $rig_name already has ${repos[*]}"
+  [ -n "$news" ] && tell_lead || say "add-repo: nothing to add; those seats already have ${wanted[*]-those repos}"
   exit 0
 fi
 if $plan; then
