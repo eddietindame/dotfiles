@@ -39,6 +39,7 @@ brew "colima"
 brew "docker"
 brew "docker-compose"
 brew "killport"
+brew "pi-coding-agent"
 # From HashiCorp's tap: homebrew-core froze terraform at 1.5.7 after the BUSL
 # licence change, and bertie-terraform needs newer.
 brew "hashicorp/tap/terraform"
