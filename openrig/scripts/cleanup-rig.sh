@@ -2,8 +2,8 @@
 # cleanup-rig.sh — undo start-rig.sh: stop the rig, remove its worktrees, its
 # builder branches and its folder.
 #
-#   cleanup-rig.sh <branch> [-r REPO] [--branches]
-#   cleanup-rig.sh --name RIG [--branches]
+#   cleanup-rig.sh <branch> [-r REPO] [--branches] [--force]
+#   cleanup-rig.sh --name RIG [--branches] [--force]
 #
 #   <branch>      the rig start-rig made for this branch (and, for rigs from
 #                 before the per-rig folders, one per repo)
@@ -12,6 +12,13 @@
 #   --branches    also delete the feature branch in each repo. Without it the
 #                 feature branch is kept, with whatever the lead merged, so a
 #                 pushed or unpushed result is never lost by accident.
+#   --force       remove worktrees even when they have uncommitted changes.
+#                 Without it cleanup stops before touching anything and lists
+#                 them.
+#
+# The lead's notes (BRIEF.md, PROGRESS.md and any other Markdown it wrote in
+# its folder) are copied to $RIG_ROOT/_archive/<date>-<rig>/ first, which
+# cleanup never deletes.
 #
 # Builder branches (<branch>-bN) are always deleted: anything worth keeping on
 # them has been merged into the feature branch by the lead.
@@ -24,13 +31,14 @@ set -euo pipefail
 {
 . "$(dirname "$0")/lib.sh"
 
-branch="" repo="" name="" drop_feature=false
+branch="" repo="" name="" drop_feature=false force=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
     -r|--repo)  need_value "$@"; repo=$(resolve_repo "$2") || die "cleanup-rig: unknown repo '$2'"; shift 2 ;;
     --name)     need_value "$@"; name="$2"; shift 2 ;;
     --branches) drop_feature=true; shift ;;
+    --force)    force=true; shift ;;
     -h|--help)  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)         die "cleanup-rig: unknown option $1" ;;
     *)          [ -z "$branch" ] || die "cleanup-rig: one branch only"; branch="$1"; shift ;;
@@ -53,6 +61,48 @@ while IFS= read -r f; do
 done < <(all_rig_envs)
 
 [ ${#envs[@]} -gt 0 ] || die "cleanup-rig: no rig from start-rig matches${name:+ --name $name}${branch:+ $branch}${repo:+ in $repo} (see $RIG_ROOT)"
+
+# ~~~ before deleting anything ~~~
+# Uncommitted work is the one thing cleanup can't get back, so check every rig
+# first and stop before any of them is touched.
+rig_worktrees() { # <rig.env>: "<base>\t<worktree>" lines, as remove_worktrees takes
+  local f="$1" lead_wt base_clone i
+  if [ "$(rig_env_get "$f" LAYOUT)" = 2 ]; then
+    worktrees_under "$(rig_env_get "$f" RIG_DIR)"
+  else
+    base_clone=$(rig_env_get "$f" BASE_CLONE)
+    lead_wt=$(rig_env_get "$f" LEAD_WT)
+    printf '%s\t%s\n' "$base_clone" "$lead_wt"
+    i=1
+    while [ "$i" -le "$(rig_env_get "$f" BUILDERS)" ]; do printf '%s\t%s\n' "$base_clone" "$lead_wt-b$i"; i=$((i + 1)); done
+  fi
+}
+if ! $force; then
+  dirty=""
+  for f in "${envs[@]}"; do
+    while IFS=$'\t' read -r _ wt; do
+      [ -d "$wt" ] && [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ] && dirty="$dirty  $wt"$'\n'
+    done < <(rig_worktrees "$f")
+  done
+  [ -z "$dirty" ] || die "cleanup-rig: these worktrees have uncommitted changes, which cleanup would discard:
+$dirty
+Commit or stash them, or run again with --force to discard them. Nothing was removed."
+fi
+
+# The lead's own Markdown, kept after the folder goes. AGENTS.md and CLAUDE.md
+# there are OpenRig's, rewritten on every launch, so they're left out.
+ARCHIVE_ROOT="$RIG_ROOT/_archive"
+archive_notes() { # <rig> <dir holding the lead's notes>
+  local dest md
+  dest="$ARCHIVE_ROOT/$(date +%Y-%m-%d)-$1"
+  for md in "$2"/*.md; do
+    [ -f "$md" ] || continue
+    case "$(basename "$md")" in AGENTS.md|CLAUDE.md) continue ;; esac
+    mkdir -p "$dest" && cp -p "$md" "$dest/"
+  done
+  [ -d "$dest" ] && say "Saved the lead's notes to $dest"
+  return 0
+}
 
 # Agents first, for the same reason cleanup-worktrees closes herdr first: their
 # sessions sit in the directories about to be deleted. --delete because the rig
@@ -106,6 +156,7 @@ cleanup_v2() { # <rig.env>
   [ "$rig_dir/.rig/rig.env" = "$f" ] && [ "$(dirname "$rig_dir")" = "$RIG_ROOT" ] ||
     die "cleanup-rig: $f names $rig_dir, which is not its own rig folder; not touching it"
 
+  archive_notes "$rig" "$rig_dir/lead"
   stop_rig "$rig"
   # Every worktree under the rig folder, whichever clone it came from, so one an
   # agent added by hand goes too.
@@ -126,12 +177,10 @@ cleanup_v1() { # <rig.env>
   base_clone=$(rig_env_get "$f" BASE_CLONE)
   lead_wt=$(rig_env_get "$f" LEAD_WT)
 
+  # This layout kept the lead's notes in its worktree's .rig/.
+  archive_notes "$rig" "$lead_wt/.rig"
   stop_rig "$rig"
-  {
-    printf '%s\t%s\n' "$base_clone" "$lead_wt"
-    i=1
-    while [ "$i" -le "$builders" ]; do printf '%s\t%s\n' "$base_clone" "$lead_wt-b$i"; i=$((i + 1)); done
-  } | while IFS=$'\t' read -r base wt; do [ -d "$wt" ] && printf '%s\t%s\n' "$base" "$wt"; done |
+  rig_worktrees "$f" | while IFS=$'\t' read -r base wt; do [ -d "$wt" ] && printf '%s\t%s\n' "$base" "$wt"; done |
     remove_worktrees
   drop_branches "$base_clone" "$feature" "$builders"
 
