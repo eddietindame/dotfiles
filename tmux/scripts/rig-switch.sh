@@ -8,6 +8,8 @@
 #
 # Seats are the tmux sessions OpenRig names <pod>-<seat>@<rig>. Their state comes
 # from `rig ps`; with the daemon down the picker still lists them, stateless.
+# rig ps takes seconds, so the picker opens on the last result it saved and
+# swaps in a fresh one when that arrives.
 # The last alert is recorded by agent-notify.sh in @agent-last-alert.
 
 self="$0"
@@ -19,6 +21,27 @@ msg() { tmux display-message ${client:+-c "$client"} "$1"; }
 # seat sessions that actually exist; rig ps also lists stale records
 live_seats() { tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '@'; }
 
+# rig ps's seat records. Every fetch is saved; with RIG_CACHED=1 the saved one
+# is used when there is one. Only the states can be out of date that way: the
+# seats themselves always come from tmux.
+NODES_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/rig-switch/nodes.json"
+rig_nodes() {
+  local nodes
+  if [ "${RIG_CACHED:-}" = 1 ] && [ -s "$NODES_CACHE" ]; then cat "$NODES_CACHE"; return; fi
+  # </dev/null: rig is Node, which saves the tty mode at startup and restores
+  # it on exit. Run alongside fzf, it put the popup back into cooked mode
+  # after fzf had made it raw, and fzf stopped seeing keys.
+  # --full for the activity reason: see the stale-hook note below.
+  if nodes=$(rig ps --nodes -A --full --json </dev/null 2>/dev/null); then
+    mkdir -p "${NODES_CACHE%/*}" &&
+      printf '%s\n' "$nodes" >"$NODES_CACHE.$$" && mv "$NODES_CACHE.$$" "$NODES_CACHE"
+    printf '%s\n' "$nodes"
+  else
+    # daemon down or not answering: the saved states beat none
+    cat "$NODES_CACHE" 2>/dev/null || echo '[]'
+  fi
+}
+
 # "rank<TAB>session<TAB>rig<TAB>seat<TAB>runtime<TAB>state<TAB>work<TAB>last",
 # one per live seat, most urgent first; last is when you were last in it.
 # Optional <rig> limits it to that rig.
@@ -26,11 +49,7 @@ seat_rows() {
   local only="${1:-}" sessions nodes
   sessions=$(tmux list-sessions -F '#{session_name}	#{session_last_attached}' 2>/dev/null |
     grep '@') || return 0
-  # </dev/null: rig is Node, which saves the tty mode at startup and restores
-  # it on exit. Run alongside fzf, it put the popup back into cooked mode
-  # after fzf had made it raw, and fzf stopped seeing keys.
-  # --full for the activity reason: see the stale-hook note below.
-  nodes=$(rig ps --nodes -A --full --json </dev/null 2>/dev/null) || nodes='[]'
+  nodes=$(rig_nodes)
   jq -r --arg sessions "$sessions" --arg only "$only" '
     (map({key: .canonicalSessionName, value: .}) | from_entries) as $by
     | $sessions | split("\n")[] | select(length > 0)
@@ -137,7 +156,13 @@ case "$mode" in
     export RIG_HERE="$here_rig"   # for --lines and --view, run by fzf
     RIG_SEL=$(mktemp "${TMPDIR:-/tmp}/rig-switch.XXXXXX") && export RIG_SEL
     trap 'rm -f "$RIG_SEL"' EXIT
-    choice=$(lead_lines "$here_rig" | fzf --ansi --delimiter '\t' --with-nth 3 \
+    # Views and seat moves redraw from the saved states, so they're instant;
+    # only refresh (ctrl-r, and once on open) waits for rig ps, and it keeps
+    # the list up meanwhile. Before anything is saved, the first open waits.
+    export RIG_CACHED=1
+    hydrate=()
+    [ -s "$NODES_CACHE" ] && hydrate=(--bind "load:unbind(load)+transform('$self' --view refresh)")
+    choice=$(lead_lines "$here_rig" | fzf "${hydrate[@]}" --ansi --delimiter '\t' --with-nth 3 \
       --no-sort --layout reverse --border rounded --border-label ' Rigs ' \
       --prompt "$LEADS_PROMPT" --info inline-right \
       --header '←/→ seat · enter switch · tab leads/all seats · alt-c rig'"'"'s seats · ctrl-r refresh' \
@@ -167,13 +192,22 @@ case "$mode" in
       echo "reload-sync('$self' --lines leads)+pos(${FZF_POS:-1})"
       exit 0
     fi
+    if [ "$2" = refresh ]; then
+      # reload-sync: the current list stays until the fresh one is ready.
+      # +pos: the rows keep their order unless a state changed, so the cursor
+      # usually stays on the same seat.
+      case "$FZF_PROMPT" in
+        "$LEADS_PROMPT") echo "reload-sync(RIG_CACHED= '$self' --lines leads)+pos(${FZF_POS:-1})" ;;
+        "$SEATS_PROMPT") echo "reload-sync(RIG_CACHED= '$self' --lines seats)+pos(${FZF_POS:-1})" ;;
+        *)               echo "reload-sync(RIG_CACHED= '$self' --lines seats {2})+pos(${FZF_POS:-1})" ;;
+      esac
+      exit 0
+    fi
     if [ "$FZF_PROMPT" = "$LEADS_PROMPT" ]; then now=leads; else now=seats; fi
     if [ "$2" = toggle ]; then [ "$now" = leads ] && now=seats || now=leads; fi
     case "$now" in
       leads) echo "reload('$self' --lines leads)+change-prompt($LEADS_PROMPT)" ;;
-      *)     [ "$2" = refresh ] && [ "$FZF_PROMPT" != "$SEATS_PROMPT" ] &&
-               { echo "reload('$self' --lines seats {2})"; exit 0; }
-             echo "reload('$self' --lines seats)+change-prompt($SEATS_PROMPT)" ;;
+      *)     echo "reload('$self' --lines seats)+change-prompt($SEATS_PROMPT)" ;;
     esac
     ;;
 
