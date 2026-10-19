@@ -25,19 +25,21 @@
 #                  floor either way). See `rig policy list`.
 #   --no-install   skip npm/pnpm install in new worktrees
 #   --plan         set everything up, then `rig up --plan` instead of launching
-#   --builder-runtime R  what the builders run: pi (default), claude-code or
-#                  codex. Pi seats keep their own state under
+#   --builder-runtime R  what the builders run: claude-code (default), pi or
+#                  codex. Builders use the most tokens, so they go on Claude
+#                  Max; pi and codex share the ChatGPT plan's usage limits. Pi
+#                  seats keep their own state under
 #                  ~/.openrig/state/pi/<session>/agent; before every launch their
 #                  auth.json, settings.json and extensions are linked to
 #                  ~/.pi/agent's, so they share your pi sign-in, default model and
-#                  the tmux bell. New rigs only: an
-#                  existing rig keeps the runtime it was created with.
+#                  the tmux bell. New rigs only: an existing rig keeps the runtime
+#                  it was created with.
 #   -s, --seat     existing rig only: also give these builders a worktree of the
 #                  -r repos, e.g. -s b1,b2 or -s all (default: the lead only)
 #   --from-lead    used by add-repo.sh: print the news for the lead instead of
 #                  sending it, and leave the rig's running state alone
 #
-# The team: lead (claude) on <branch>, builders b1..bN (pi) on <branch>-bN,
+# The team: lead (claude) on <branch>, builders b1..bN (claude) on <branch>-bN,
 # the same branch names in every repo, and reviewer r1 (codex) read-only in the
 # lead's folder. Sessions are orch-lead@<rig>, dev-b1@<rig>, review-r1@<rig>.
 # With desktop and packages both in the rig, each seat's desktop is linked to
@@ -67,7 +69,7 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 branch="" repo_args=() added=() builders=2 builders_given=false base="" brief_src="" rig_name=""
-builder_runtime=pi policy="builtin:auto" install=true plan=false from_lead=false edit_brief=false seat_args=""
+builder_runtime=claude-code policy="builtin:auto" install=true plan=false from_lead=false edit_brief=false seat_args=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -82,7 +84,7 @@ while [ $# -gt 0 ]; do
     --plan)        plan=true; shift ;;
     -s|--seat)     need_value "$@"; seat_args="$seat_args${seat_args:+,}$2"; shift 2 ;;
     --builder-runtime) need_value "$@"; builder_runtime="$2"; shift 2
-                   case "$builder_runtime" in pi|claude-code|codex) ;; *) die "start-rig: --builder-runtime is pi, claude-code or codex" ;; esac ;;
+                   case "$builder_runtime" in pi|claude-code|codex) ;; *) die "start-rig: --builder-runtime is claude-code, pi or codex" ;; esac ;;
     --from-lead)   from_lead=true; shift ;;
     -h|--help)     sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)            die "start-rig: unknown option $1" ;;
