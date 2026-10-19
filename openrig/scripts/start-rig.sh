@@ -5,7 +5,7 @@
 #
 #   start-rig.sh <branch> [-r REPOS] [-n BUILDERS] [-b BASE] [--brief FILE] [-e]
 #                [--name RIG] [--policy POLICY] [--no-install] [--plan]
-#                [-s SEATS]
+#                [-s SEATS] [--builder-runtime RUNTIME]
 #
 #   -r, --repo     comma-separated repos, by name or prefix: bd, bp, bw, bb, ba, bt
 #                  (default bd,bp). Every seat gets a worktree of each.
@@ -25,12 +25,19 @@
 #                  floor either way). See `rig policy list`.
 #   --no-install   skip npm/pnpm install in new worktrees
 #   --plan         set everything up, then `rig up --plan` instead of launching
+#   --builder-runtime R  what the builders run: pi (default), claude-code or
+#                  codex. Pi seats keep their own state under
+#                  ~/.openrig/state/pi/<session>/agent; before every launch their
+#                  auth.json, settings.json and extensions are linked to
+#                  ~/.pi/agent's, so they share your pi sign-in, default model and
+#                  the tmux bell. New rigs only: an
+#                  existing rig keeps the runtime it was created with.
 #   -s, --seat     existing rig only: also give these builders a worktree of the
 #                  -r repos, e.g. -s b1,b2 or -s all (default: the lead only)
 #   --from-lead    used by add-repo.sh: print the news for the lead instead of
 #                  sending it, and leave the rig's running state alone
 #
-# The team: lead (claude) on <branch>, builders b1..bN (claude) on <branch>-bN,
+# The team: lead (claude) on <branch>, builders b1..bN (pi) on <branch>-bN,
 # the same branch names in every repo, and reviewer r1 (codex) read-only in the
 # lead's folder. Sessions are orch-lead@<rig>, dev-b1@<rig>, review-r1@<rig>.
 # With desktop and packages both in the rig, each seat's desktop is linked to
@@ -57,7 +64,7 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 branch="" repo_args=() added=() builders=2 builders_given=false base="" brief_src="" rig_name=""
-policy="builtin:auto" install=true plan=false from_lead=false edit_brief=false seat_args=""
+builder_runtime=pi policy="builtin:auto" install=true plan=false from_lead=false edit_brief=false seat_args=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -71,6 +78,8 @@ while [ $# -gt 0 ]; do
     --no-install)  install=false; shift ;;
     --plan)        plan=true; shift ;;
     -s|--seat)     need_value "$@"; seat_args="$seat_args${seat_args:+,}$2"; shift 2 ;;
+    --builder-runtime) need_value "$@"; builder_runtime="$2"; shift 2
+                   case "$builder_runtime" in pi|claude-code|codex) ;; *) die "start-rig: --builder-runtime is pi, claude-code or codex" ;; esac ;;
     --from-lead)   from_lead=true; shift ;;
     -h|--help)     sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)            die "start-rig: unknown option $1" ;;
@@ -431,7 +440,7 @@ to pick it up. An \`npm install\` in desktop undoes the link: re-link with
     for seat in "${seats[@]:1}"; do
       echo "      - id: $seat"
       echo "        agent_ref: \"path:$agents/development/implementer\""
-      echo "        runtime: claude-code"
+      echo "        runtime: $builder_runtime"
       echo "        profile: default"
       echo "        cwd: \"$rig_dir/$seat\""
       echo "        startup:"
@@ -530,6 +539,20 @@ if $plan; then
   rig up "$spec_dir/rig.yaml" --plan
   [ -z "$news" ] || { say ""; say "start-rig: once it is running, tell the lead:"; say "  rig send orch-lead@$rig_name '$news'"; }
   exit 0
+fi
+
+# Pi seats don't see ~/.pi/agent: OpenRig gives each its own agent directory and
+# copies nothing in. Link the sign-in, settings and extensions (the tmux bell)
+# there instead of copying, so a token refresh in one seat reaches the others
+# (pi rewrites auth.json in place, which keeps the link). Done before every
+# launch, so a restored seat gets them too.
+if grep -q '^ *runtime: pi$' "$spec_dir/rig.yaml"; then
+  [ -f "$HOME/.pi/agent/auth.json" ] || warn "start-rig: no ~/.pi/agent/auth.json; sign pi in (pi, then /login) or the pi builders can't reach a model"
+  for seat in "${seats[@]:1}"; do
+    pi_dir="${OPENRIG_HOME:-$HOME/.openrig}/state/pi/dev-$seat@$rig_name/agent"
+    mkdir -p "$pi_dir"
+    for f in auth.json settings.json extensions; do ln -sfn "$HOME/.pi/agent/$f" "$pi_dir/$f"; done
+  done
 fi
 
 state=$(rig ps --json 2>/dev/null | jq -r --arg n "$rig_name" 'map(select(.name == $n))[0].status // empty' || true)
