@@ -29,6 +29,13 @@ conversation, so anything not written there is lost.
    you go.
 4. Only start assigning when the human says go.
 
+The rig launches before its dependencies are installed; start-rig keeps
+installing in the background and sends you a message when every worktree is
+ready, or which ones failed. Reading code needs none of it. Until that message
+arrives, don't assign a slice that runs checks, tests or dev servers, and don't
+run `npm install` or `pnpm install` yourself: two installs in one worktree
+break each other.
+
 ## Running the team
 
 - Slices must not share files. Anything shared (see "Lead-only files") you do

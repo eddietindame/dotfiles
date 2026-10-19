@@ -16,8 +16,8 @@
 #   --brief FILE   seed the lead's living brief (lead/BRIEF.md) with FILE
 #                  (default: empty; you brief the lead in its session)
 #   -e, --edit-brief  open the brief in nvim and launch once you quit it.
-#                  Installs run in the background meanwhile. Works with --brief
-#                  (edit the seeded copy) and on an existing rig.
+#                  Works with --brief (edit the seeded copy) and on an
+#                  existing rig.
 #   --name RIG     rig name, when the one derived from the branch is too long
 #   --policy P     permission_policy for every seat (default builtin:auto: Claude
 #                  seats launch in auto mode, so builders don't sit on a
@@ -43,6 +43,9 @@
 # With desktop and packages both in the rig, each seat's desktop is linked to
 # that seat's packages worktree (npm run link:ui), so package edits show up
 # without a publish.
+#
+# The rig launches without waiting for dependency installs; they finish in the
+# background (logs in .rig/logs/) and the lead is told when they're done.
 #
 # Safe to re-run: existing worktrees, specs and briefs are left alone, and a rig
 # that already exists is brought back with `rig up <rig> --existing`.
@@ -262,24 +265,101 @@ elif [ -n "$brief_src" ]; then
 fi
 
 # ~~~ dependencies, in parallel: node_modules is the slow part ~~~
-pids=() logs=() wts=() cmds=()
+# A launch doesn't wait for them: the lead starts on the brief and the code,
+# which need none, and a background job installs, links desktop to packages
+# and then tells the lead. --plan and the lead's add-repo still wait, since
+# nothing launches after them.
+to_install=()
 if $install && [ ${#new_wts[@]} -gt 0 ]; then
   for wt in "${new_wts[@]}"; do
     [ -d "$wt/node_modules" ] && continue
-    if [ -f "$wt/pnpm-lock.yaml" ]; then cmd="pnpm install"
-    elif [ -f "$wt/package-lock.json" ]; then cmd="npm install"
-    else continue; fi
-    seat=$(basename "$(dirname "$wt")")
-    log="$spec_dir/logs/install-$seat-$(basename "$wt").log"
-    say "start-rig: $cmd in $seat/$(basename "$wt") (log: $log)"
-    (cd "$wt" && $cmd) >"$log" 2>&1 &
-    pids+=($!) logs+=("$log") wts+=("$wt") cmds+=("$cmd")
+    [ -f "$wt/pnpm-lock.yaml" ] || [ -f "$wt/package-lock.json" ] || continue
+    to_install+=("$wt")
   done
+fi
+install_cmd() { [ -f "$1/pnpm-lock.yaml" ] && echo "pnpm install" || echo "npm install"; }
+install_log() { echo "$spec_dir/logs/install-$(basename "$(dirname "$1")")-$(basename "$1").log"; }
+
+# Prints one line per worktree whose install failed. A failure is retried once
+# on its own: the worktrees of one repo share its .git/config, and a prepare
+# script that writes to it (husky's hooksPath in packages) fails when another
+# seat's install holds the lock.
+run_installs() {
+  local wt pids=() i
+  for wt in "${to_install[@]}"; do
+    say "start-rig: $(install_cmd "$wt") in $(basename "$(dirname "$wt")")/$(basename "$wt") (log: $(install_log "$wt"))" >&2
+    (cd "$wt" && $(install_cmd "$wt")) >"$(install_log "$wt")" 2>&1 &
+    pids+=($!)
+  done
+  for i in "${!pids[@]}"; do
+    wait "${pids[$i]}" && continue
+    wt=${to_install[$i]}
+    say "start-rig: install failed in $(basename "$(dirname "$wt")")/$(basename "$wt"); retrying it alone" >&2
+    (cd "$wt" && $(install_cmd "$wt")) >>"$(install_log "$wt")" 2>&1 || printf '%s\n' "$wt"
+  done
+}
+
+# Each seat's desktop uses that seat's packages. Desktop pins
+# @bertie-technology/ui from the registry, so without this a seat's package
+# edits are invisible to its desktop. Linked seats stay linked across re-runs;
+# an `npm install` in desktop undoes it, and the culture file says so. Prints a
+# line per seat that couldn't be linked.
+link_seats() {
+  local seat desk pkgs
+  has_repo bertie-desktop && has_repo bertie-packages || return 0
+  for seat in "${seats[@]}"; do
+    desk="$rig_dir/$seat/bertie-desktop"
+    pkgs="$rig_dir/$seat/bertie-packages"
+    [ -d "$desk" ] && [ -d "$pkgs" ] || continue   # a seat given only one of them
+    grep -q '"link:ui"' "$desk/package.json" 2>/dev/null || { echo "$seat: bertie-desktop has no link:ui script"; continue; }
+    [ -d "$desk/node_modules" ] || { echo "$seat: bertie-desktop has no node_modules (re-run without --no-install)"; continue; }
+    [ "$(readlink "$desk/node_modules/@bertie-technology/ui" 2>/dev/null)" = "$pkgs/packages/internal/ui" ] && continue
+    if (cd "$desk" && npm run --silent link:ui -- "$pkgs") >>"$spec_dir/logs/link-ui.log" 2>&1; then
+      say "start-rig: $seat/bertie-desktop uses $seat/bertie-packages for @bertie-technology/ui" >&2
+    else
+      echo "$seat: link:ui failed, see $spec_dir/logs/link-ui.log"
+    fi
+  done
+}
+# The culture says desktop is linked wherever a seat has both; link_seats
+# reports the seats where that didn't work.
+linked=false
+has_repo bertie-desktop && has_repo bertie-packages && linked=true
+
+background_installs=false
+if [ ${#to_install[@]} -gt 0 ] && ! $plan && ! $from_lead; then
+  background_installs=true
+  mkdir -p "$spec_dir/logs"
+  # Detached from this terminal, so closing it or quitting start-rig doesn't
+  # kill the installs. The lead is told once they're done; until its session
+  # is up the message is retried.
+  (
+    trap '' HUP
+    failed=$(run_installs)
+    unlinked=$(link_seats)
+    if [ -z "$failed$unlinked" ]; then
+      msg="start-rig: dependencies are installed in every worktree. Builders can run checks and dev servers now."
+      $linked && msg="$msg Desktop is linked to each seat's own packages."
+    else
+      msg="start-rig: dependency installs finished with problems."
+      for wt in $failed; do
+        msg="$msg Install failed in $(basename "$(dirname "$wt")")/$(basename "$wt"): see $(install_log "$wt"), then run $(install_cmd "$wt") there."
+      done
+      [ -z "$unlinked" ] || msg="$msg Not linked to packages: $(printf '%s' "$unlinked" | paste -sd ';' -)."
+      msg="$msg Every other worktree is ready."
+    fi
+    say "$msg"
+    i=0
+    until rig send "orch-lead@$rig_name" "$msg" >/dev/null 2>&1; do
+      i=$((i + 1)); [ "$i" -lt 60 ] || { warn "start-rig: couldn't reach orch-lead@$rig_name to tell it"; exit 1; }
+      sleep 10
+    done
+  ) >"$spec_dir/logs/installs.log" 2>&1 </dev/null &
+  disown
 fi
 
 if $edit_brief && ! $from_lead; then
   if [ -t 0 ] && [ -t 1 ]; then
-    [ ${#pids[@]} -eq 0 ] || say "start-rig: installs carry on in the background; the rig launches when you quit nvim"
     # Scripts don't see the zsh alias, which is what picks the kickstart config.
     NVIM_APPNAME="${NVIM_APPNAME:-nvim/kickstart-modular}" ${EDITOR:-nvim} "$live_brief" || warn "start-rig: nvim exited with an error; carrying on with $live_brief as it is"
   else
@@ -287,39 +367,11 @@ if $edit_brief && ! $from_lead; then
   fi
 fi
 
-# A failed install is retried once on its own: the worktrees of one repo share
-# its .git/config, and a prepare script that writes to it (husky's hooksPath in
-# packages) fails when another seat's install holds the lock.
-failed=false
-[ ${#pids[@]} -gt 0 ] && for i in "${!pids[@]}"; do
-  wait "${pids[$i]}" && continue
-  wt=${wts[$i]}
-  say "start-rig: install failed in $(basename "$(dirname "$wt")")/$(basename "$wt"); retrying it alone"
-  (cd "$wt" && ${cmds[$i]}) >>"${logs[$i]}" 2>&1 ||
-    { warn "start-rig: install failed, see ${logs[$i]}"; failed=true; }
-done
-$failed && die "start-rig: fix the install, then re-run (worktrees are kept)"
-
-# ~~~ each seat's desktop uses that seat's packages ~~~
-# Desktop pins @bertie-technology/ui from the registry, so without this a seat's
-# package edits are invisible to its desktop. Linked seats stay linked across
-# re-runs; an `npm install` in desktop undoes it, and the culture file says so.
-linked=false
-if has_repo bertie-desktop && has_repo bertie-packages; then
-  for seat in "${seats[@]}"; do
-    desk="$rig_dir/$seat/bertie-desktop"
-    pkgs="$rig_dir/$seat/bertie-packages"
-    [ -d "$desk" ] && [ -d "$pkgs" ] || continue   # a seat given only one of them
-    grep -q '"link:ui"' "$desk/package.json" 2>/dev/null || { warn "start-rig: $seat/bertie-desktop has no link:ui script; not linked"; continue; }
-    [ -d "$desk/node_modules" ] || { warn "start-rig: $seat/bertie-desktop has no node_modules yet; not linked (re-run without --no-install)"; continue; }
-    [ "$(readlink "$desk/node_modules/@bertie-technology/ui" 2>/dev/null)" = "$pkgs/packages/internal/ui" ] && { linked=true; continue; }
-    if (cd "$desk" && npm run --silent link:ui -- "$pkgs") >>"$spec_dir/logs/link-ui.log" 2>&1; then
-      say "start-rig: $seat/bertie-desktop uses $seat/bertie-packages for @bertie-technology/ui"
-      linked=true
-    else
-      warn "start-rig: link:ui failed for $seat, see $spec_dir/logs/link-ui.log"
-    fi
-  done
+if ! $background_installs; then
+  failed=$(run_installs)
+  [ -z "$failed" ] || { for wt in $failed; do warn "start-rig: install failed, see $(install_log "$wt")"; done; die "start-rig: fix the install, then re-run (worktrees are kept)"; }
+  unlinked=$(link_seats)
+  [ -z "$unlinked" ] || warn "start-rig: not linked to packages: $unlinked"
 fi
 
 # ~~~ spec, culture, guidance, brief ~~~
@@ -569,5 +621,6 @@ say "  watch    rig ps --nodes --rig $rig_name   ·   rig tui"
 say "  brief    $lead_dir/BRIEF.md"
 say "  progress $lead_dir/PROGRESS.md"
 say "  undo     cleanup-rig $branch"
+! $background_installs || say "  installs still running; the lead is told when they finish (log: $spec_dir/logs/installs.log)"
 exit
 }

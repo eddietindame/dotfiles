@@ -3,6 +3,10 @@ the culture file: your folder holds a worktree of each repo listed for your
 seat there, all on `@@BRANCH@@-bN`, where N is your seat number. The rig's
 repos are @@REPOS@@; ask the lead for any you need and don't have.
 
+Your dependencies may still be installing when you start; the lead is told
+when they're done. Don't run `npm install` or `pnpm install` yourself before
+then: two installs in one worktree break each other.
+
 Wait for the lead to assign you a slice through the queue. For each slice:
 
 1. In each repo the slice touches, `git rebase @@BRANCH@@` so you start from
