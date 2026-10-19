@@ -105,6 +105,8 @@ tmuxinator/desktop-host
 **.bak/
 
 
-# Pi - coding agent. ~/.pi/agent/settings.json symlinks here.
+# Pi - coding agent. ~/.pi/agent/settings.json and extensions symlink here.
 !pi/
 !pi/settings.json
+!pi/extensions/
+!pi/extensions/**

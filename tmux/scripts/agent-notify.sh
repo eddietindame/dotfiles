@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # agent-notify.sh <done|input> — ring the terminal when an agent changes state,
-# the tmux stand-in for herdr's sounds. Called from Claude Code and Codex hooks.
+# the tmux stand-in for herdr's sounds. Called from Claude Code and Codex hooks
+# and Pi's extension (pi/extensions/agent-notify.ts).
 #
 # Rings every attached tmux client directly instead of sending a bell to the
 # agent's own pane: tmux only forwards a pane's bell to clients attached to that
@@ -16,8 +17,13 @@
 state="${1:-done}"
 cat >/dev/null 2>&1 || true   # hook payload on stdin; not needed
 
-[ -n "${TMUX_PANE:-}" ] || exit 0   # not in tmux (herdr has its own sounds)
 command -v tmux >/dev/null || exit 0
+# OpenRig starts Pi seats with a bare environment: no TMUX_PANE, but the seat's
+# session name, which is also its tmux session.
+if [ -z "${TMUX_PANE:-}" ] && [ -n "${OPENRIG_SESSION_NAME:-}" ]; then
+  TMUX_PANE=$(tmux display-message -p -t "=$OPENRIG_SESSION_NAME:" '#{pane_id}' 2>/dev/null)
+fi
+[ -n "${TMUX_PANE:-}" ] || exit 0   # not in tmux (herdr has its own sounds)
 
 label=$(tmux display-message -p -t "$TMUX_PANE" '#{session_name}:#{window_name}' 2>/dev/null) || exit 0
 # For prefix+a (rig-switch.sh --last-alert): a pane id targets session, window
