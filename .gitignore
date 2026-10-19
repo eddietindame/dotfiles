@@ -73,6 +73,9 @@ tmuxinator/desktop-host
 # README
 !README.md
 
+# Operational commands for the headless mini
+!Makefile
+
 # QMK firmware
 !qmk/
 !qmk/**
@@ -83,6 +86,7 @@ tmuxinator/desktop-host
 # Homebrew - Brewfile only, trust.json is brew state
 !homebrew/
 !homebrew/Brewfile
+!homebrew/Brewfile.mini
 
 # Block specific files/patterns even in allowed directories
 **/.DS_Store
