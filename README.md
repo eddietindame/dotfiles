@@ -14,6 +14,31 @@ _______         '   _    \                      .---.
                             `'-'     |_|
 ```
 
+## OpenRig and pi on a new machine
+
+`start-rig` / `cleanup-rig` (in `openrig/scripts/`, aliased in `zsh/.zshrc`)
+run OpenRig teams: a Claude lead, pi builders and a Codex reviewer.
+
+1. Install the tools: `brew bundle` (the shared `homebrew/Brewfile` has pi,
+   tmux, tmuxinator and volta), then `volta install @openrig/cli`.
+2. Point pi at this repo's config:
+   ```
+   mkdir -p ~/.pi/agent
+   ln -sfn ~/.config/pi/settings.json ~/.pi/agent/settings.json
+   ln -sfn ~/.config/pi/extensions ~/.pi/agent/extensions
+   ```
+3. Sign pi in: run `pi`, then `/login` with the ChatGPT account. A ChatGPT
+   sign-in only allows the models codex lists (`settings.json` picks
+   `gpt-6.1-sol`). start-rig links this sign-in into every pi builder.
+4. Sign in to `claude` and `codex` too: the lead and reviewer use them.
+5. Agent bells: pi rings through `pi/extensions/agent-notify.ts`. Claude and
+   Codex need hooks calling `~/.config/tmux/scripts/agent-notify.sh` (`done`
+   on Stop, `input` on Notification in `~/.claude/settings.json`; `notify` in
+   `~/.codex/config.toml`); those files aren't in this repo.
+
+Rigs live in `~/Documents/bertie-rigs/` (`BERTIE_RIG_ROOT` overrides it);
+cleanup-rig keeps each lead's notes in its `_archive/`.
+
 ## Charybdis 4x6 Layout
 
 Main layout for the full-size Charybdis via VIA.
