@@ -2,6 +2,7 @@
 # rig-switch.sh — get around OpenRig seats from tmux.
 #
 #   rig-switch.sh --open <client>        prefix+A: fzf popup of rig leads / seats
+#                                        (ctrl-y in it copies the rig name to the laptop)
 #   rig-switch.sh --last-lead <client>   prefix+g: back to the last lead you were in
 #   rig-switch.sh --next-input <client>  prefix+N: cycle the seats waiting on you
 #   rig-switch.sh --last-alert <client>  prefix+a: jump to the last agent that rang
@@ -165,7 +166,7 @@ case "$mode" in
     choice=$(lead_lines "$here_rig" | fzf "${hydrate[@]}" --ansi --delimiter '\t' --with-nth 3 \
       --no-sort --layout reverse --border rounded --border-label ' Rigs ' \
       --prompt "$LEADS_PROMPT" --info inline-right \
-      --header '←/→ seat · enter switch · tab leads/all seats · alt-c rig'"'"'s seats · ctrl-r refresh' \
+      --header '←/→ seat · enter switch · tab leads/seats · alt-c rig'"'"'s seats · ctrl-y copy rig · ctrl-r refresh' \
       --preview "tmux capture-pane -ep -t {1} | awk 'NF{last=NR} {l[NR]=\$0} END{for(i=1;i<=last;i++)print l[i]}' | tail -n \$FZF_PREVIEW_LINES" \
       --preview-window 'right,50%,border-left' \
       --bind 'focus:transform-preview-label:echo " {1} "' \
@@ -173,7 +174,8 @@ case "$mode" in
       --bind "right:transform('$self' --view next {2})" \
       --bind "left:transform('$self' --view prev {2})" \
       --bind "alt-c:reload('$self' --lines seats {2})+transform-prompt(echo ' '{2}' › ')" \
-      --bind "ctrl-r:transform('$self' --view refresh)") || exit 0
+      --bind "ctrl-r:transform('$self' --view refresh)" \
+      --bind "ctrl-y:transform-border-label(printf %s {2} | ~/.config/tmux/scripts/copy-on-laptop.sh && echo ' Copied '{2}' ' || echo ' Copy failed ')") || exit 0
     tmux switch-client -c "$client" -t "=$(cut -f1 <<<"$choice")"
     ;;
 
