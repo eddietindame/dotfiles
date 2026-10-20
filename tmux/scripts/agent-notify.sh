@@ -15,7 +15,7 @@
 # the laptop over ssh (@agent-input-sound, default Glass); if the laptop can't
 # be reached it falls back to two bells.
 #
-# Which agents alert, @agent-alert-mode (prefix+M cycles it):
+# Which agents alert, @agent-alert-mode (prefix+M picks it from a menu):
 #   lead     rig leads only; builders and reviewers stay quiet (default).
 #            Agents outside rigs still alert.
 #   current  only agents in the session or rig the client is in
@@ -27,21 +27,26 @@ cat >/dev/null 2>&1 || true   # hook payload on stdin; not needed
 
 LAPTOP=eddietindame@100.86.187.87   # as in copy-on-laptop.sh
 
-if [ "$state" = --cycle ]; then   # prefix+M: <client>
-  case "$(tmux show -gv @agent-alert-mode 2>/dev/null)" in
-    current) next=all ;;
-    all)     next=lead ;;
-    *)       next=current ;;
-  esac
-  tmux set -g @agent-alert-mode "$next"
-  case "$next" in
-    lead)    what="rig leads only (and agents outside rigs)" ;;
-    current) what="only agents in the session or rig you're in" ;;
-    all)     what="every agent" ;;
-  esac
-  tmux display-message ${2:+-c "$2"} "Agent alerts: $next — $what"
-  exit 0
-fi
+case "$state" in
+  --menu)   # prefix+M: <client>. Pick which agents alert you.
+    mode=$(tmux show -gv @agent-alert-mode 2>/dev/null); mode="${mode:-lead}"
+    item() { # <mode> <key> <text>: "● " marks the current mode
+      local mark="  "; [ "$1" = "$mode" ] && mark="● "
+      printf '%s\0%s\0%s\0' "$mark$3" "$2" "run-shell -b \"'$0' --set $1 '$client'\""
+    }
+    client="${2:-}"
+    items=()
+    while IFS= read -r -d '' x; do items+=("$x"); done < <(
+      item lead l "Leads only (and agents outside rigs)"
+      item current c "This session or rig only"
+      item all a "Every agent")
+    tmux display-menu ${client:+-c "$client"} -T " Agent alerts " -x C -y C "${items[@]}"
+    exit 0 ;;
+  --set)    # <mode> <client>, from the menu
+    tmux set -g @agent-alert-mode "$2"
+    tmux display-message ${3:+-c "$3"} "Agent alerts: $2"
+    exit 0 ;;
+esac
 
 command -v tmux >/dev/null || exit 0
 # OpenRig starts Pi seats with a bare environment: no TMUX_PANE, but the seat's
