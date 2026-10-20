@@ -6,7 +6,8 @@
 #   cleanup-rig.sh --name RIG [--branches] [--force]
 #
 #   <branch>      the rig start-rig made for this branch (and, for rigs from
-#                 before the per-rig folders, one per repo)
+#                 before the per-rig folders, one per repo). A rig's name works
+#                 too when no rig has that branch.
 #   -r, --repo    only rigs that include this repo (name or bd/bw/bb/bp/bt)
 #   --name RIG    one rig by name, for rigs started with --name
 #   --branches    also delete the feature branch in each repo. Without it the
@@ -59,6 +60,13 @@ while IFS= read -r f; do
   fi
   envs+=("$f")
 done < <(all_rig_envs)
+
+# Not a branch any rig has: try it as a rig name.
+if [ ${#envs[@]} -eq 0 ] && [ -z "$name" ] && [ -z "$repo" ]; then
+  while IFS= read -r f; do
+    [ "$(rig_env_get "$f" RIG)" = "$branch" ] && envs+=("$f")
+  done < <(all_rig_envs)
+fi
 
 [ ${#envs[@]} -gt 0 ] || die "cleanup-rig: no rig from start-rig matches${name:+ --name $name}${branch:+ $branch}${repo:+ in $repo} (see $RIG_ROOT)"
 
