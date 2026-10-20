@@ -41,7 +41,10 @@ case "$state" in
     client="${2:-}"
     items=()
     item() { # <option> <key> <text>
-      local box="[ ]"; [ "$(opt "$1")" = on ] && box="[x]"
+      # Nerd Font toggle switches (nf-md-toggle_switch / _off_outline)
+      local box="#[fg=#7a8478]󰨙#[default]"
+      [ "$(opt "$1")" = on ] && box="#[fg=#a7c080]󰔡#[default]"
+      box=$(printf "$box")
       items+=("$box $3" "$2" "run-shell -b \"'$0' --toggle $1 '$client'\"")
     }
     item leads      l "Rig leads"
