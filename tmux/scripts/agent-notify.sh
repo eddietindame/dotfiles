@@ -15,11 +15,12 @@
 # the laptop over ssh (@agent-input-sound, default Glass); if the laptop can't
 # be reached it falls back to two bells.
 #
-# Which agents alert, @agent-alert-mode (prefix+M picks it from a menu):
-#   lead     rig leads only; builders and reviewers stay quiet (default).
-#            Agents outside rigs still alert.
-#   current  only agents in the session or rig the client is in
-#   all      every agent
+# Which alerts reach you, as tmux options (prefix+M toggles them in a menu):
+#   @agent-alert-leads        on   rig leads, done and input
+#   @agent-alert-seat-input   on   builders and reviewers waiting on you
+#   @agent-alert-seat-done    off  builders and reviewers finishing a turn
+#   @agent-alert-outside      on   agents outside rigs (your own claude, start-dev)
+#   @agent-alert-current      off  only agents in the session or rig you're in
 # Clients already looking at the agent's pane get nothing: you can see it.
 
 state="${1:-done}"
@@ -27,25 +28,34 @@ cat >/dev/null 2>&1 || true   # hook payload on stdin; not needed
 
 LAPTOP=eddietindame@100.86.187.87   # as in copy-on-laptop.sh
 
+# @agent-alert-<name>, or its default when unset
+DEFAULTS="leads=on seat-input=on seat-done=off outside=on current=off"
+opt() {
+  local v; v=$(tmux show -gv "@agent-alert-$1" 2>/dev/null)
+  if [ -z "$v" ]; then v="${DEFAULTS#*"$1"=}"; v="${v%% *}"; fi
+  printf '%s' "$v"
+}
+
 case "$state" in
-  --menu)   # prefix+M: <client>. Pick which agents alert you.
-    mode=$(tmux show -gv @agent-alert-mode 2>/dev/null); mode="${mode:-lead}"
-    item() { # <mode> <key> <text>: "● " marks the current mode
-      local mark="  "; [ "$1" = "$mode" ] && mark="● "
-      printf '%s\0%s\0%s\0' "$mark$3" "$2" "run-shell -b \"'$0' --set $1 '$client'\""
-    }
+  --menu)   # prefix+M: <client>. Checkboxes; picking one toggles it and reopens.
     client="${2:-}"
     items=()
-    while IFS= read -r -d '' x; do items+=("$x"); done < <(
-      item lead l "Leads only (and agents outside rigs)"
-      item current c "This session or rig only"
-      item all a "Every agent")
+    item() { # <option> <key> <text>
+      local box="[ ]"; [ "$(opt "$1")" = on ] && box="[x]"
+      items+=("$box $3" "$2" "run-shell -b \"'$0' --toggle $1 '$client'\"")
+    }
+    item leads      l "Rig leads"
+    item seat-input i "Builders and reviewers needing input"
+    item seat-done  d "Builders and reviewers finishing"
+    item outside    o "Agents outside rigs"
+    items+=("")
+    item current    c "Only the rig or session I'm in"
     tmux display-menu ${client:+-c "$client"} -T " Agent alerts " -x C -y C "${items[@]}"
     exit 0 ;;
-  --set)    # <mode> <client>, from the menu
-    tmux set -g @agent-alert-mode "$2"
-    tmux display-message ${3:+-c "$3"} "Agent alerts: $2"
-    exit 0 ;;
+  --toggle) # <option> <client>, from the menu
+    [ "$(opt "$2")" = on ] && v=off || v=on
+    tmux set -g "@agent-alert-$2" "$v"
+    exec "$0" --menu "${3:-}" ;;
 esac
 
 command -v tmux >/dev/null || exit 0
@@ -58,19 +68,25 @@ fi
 
 session=$(tmux display-message -p -t "$TMUX_PANE" '#{session_name}' 2>/dev/null) || exit 0
 label=$(tmux display-message -p -t "$TMUX_PANE" '#{session_name}:#{window_name}')
-mode=$(tmux show -gv @agent-alert-mode 2>/dev/null); mode="${mode:-lead}"
 
 # Rig seats are <pod>-<seat>@<rig>; leads are <pod>-lead@<rig>.
 case "$session" in *@*) rig="${session#*@}" ;; *) rig="" ;; esac
-if [ "$mode" = lead ] && [ -n "$rig" ]; then
-  case "${session%@*}" in *-lead) ;; *) exit 0 ;; esac
+if [ -z "$rig" ]; then
+  wanted=$(opt outside)
+else
+  case "${session%@*}" in
+    *-lead) wanted=$(opt leads) ;;
+    *)      [ "$state" = input ] && wanted=$(opt seat-input) || wanted=$(opt seat-done) ;;
+  esac
 fi
+[ "$wanted" = on ] || exit 0
+current=$(opt current)
 
 # The clients to alert, as "<client>\t<tty>" lines.
 targets=$(tmux list-clients -F '#{client_name}	#{client_tty}	#{pane_id}	#{session_name}' 2>/dev/null |
   while IFS=$'\t' read -r client tty pane csession; do
     [ "$pane" = "$TMUX_PANE" ] && continue
-    if [ "$mode" = current ] && [ "$csession" != "$session" ]; then
+    if [ "$current" = on ] && [ "$csession" != "$session" ]; then
       [ -n "$rig" ] && [ "${csession#*@}" = "$rig" ] && [ "$csession" != "${csession#*@}" ] || continue
     fi
     printf '%s\t%s\n' "$client" "$tty"
