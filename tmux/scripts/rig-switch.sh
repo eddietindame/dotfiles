@@ -52,7 +52,10 @@ seat_rows() {
     grep '@') || return 0
   nodes=$(rig_nodes)
   jq -r --arg sessions "$sessions" --arg only "$only" '
-    (map({key: .canonicalSessionName, value: .}) | from_entries) as $by
+    # Seats never launched (one added by hand, say) have no session name yet
+    (if type == "array" then . else [] end
+     | map(select(.canonicalSessionName != null)
+           | {key: .canonicalSessionName, value: .}) | from_entries) as $by
     | $sessions | split("\n")[] | select(length > 0)
     | split("\t") as [$s, $last]
     | ($s | split("@")) as $p
