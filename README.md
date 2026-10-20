@@ -17,8 +17,8 @@ _______         '   _    \                      .---.
 ## OpenRig and pi on a new machine
 
 `start-rig` / `cleanup-rig` (in `openrig/scripts/`, aliased in `zsh/.zshrc`)
-run OpenRig teams: a Claude lead, Claude builders and a Codex reviewer.
-`--builder-runtime pi` puts the builders on pi instead. pi and Codex share
+run OpenRig teams: a Claude lead, Claude builders and a pi reviewer
+(`--builder-runtime` / `--reviewer-runtime` change them). pi and Codex share
 the ChatGPT plan's usage limits, which two busy builders use up quickly.
 
 1. Install the tools: `brew bundle` (the shared `homebrew/Brewfile` has pi,
@@ -29,10 +29,11 @@ the ChatGPT plan's usage limits, which two busy builders use up quickly.
    ln -sfn ~/.config/pi/settings.json ~/.pi/agent/settings.json
    ln -sfn ~/.config/pi/extensions ~/.pi/agent/extensions
    ```
-3. For pi builders, sign pi in: run `pi`, then `/login` with the ChatGPT account. A ChatGPT
+3. Sign pi in: run `pi`, then `/login` with the ChatGPT account. A ChatGPT
    sign-in only allows the models codex lists (`settings.json` picks
-   `gpt-6.1-sol`). start-rig links this sign-in into every pi builder.
-4. Sign in to `claude` and `codex` too: the lead and reviewer use them.
+   `gpt-6.1-sol`). start-rig links this sign-in into every pi seat.
+4. Sign in to `claude` too (the lead and builders), and `codex` if a rig uses
+   it.
 5. Agent bells: pi rings through `pi/extensions/agent-notify.ts`. Claude and
    Codex need hooks calling `~/.config/tmux/scripts/agent-notify.sh` (`done`
    on Stop, `input` on Notification in `~/.claude/settings.json`; `notify` in

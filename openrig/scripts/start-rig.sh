@@ -21,7 +21,7 @@
 #   --name RIG     rig name, when the one derived from the branch is too long
 #   --policy P     permission_policy for every seat (default builtin:auto: Claude
 #                  seats launch in auto mode, so builders don't sit on a
-#                  permission prompt nobody sees; the codex reviewer is at the
+#                  permission prompt nobody sees; a codex reviewer is at the
 #                  floor either way). See `rig policy list`.
 #   --no-install   skip npm/pnpm install in new worktrees
 #   --plan         set everything up, then `rig up --plan` instead of launching
@@ -34,13 +34,17 @@
 #                  ~/.pi/agent's, so they share your pi sign-in, default model and
 #                  the tmux bell. New rigs only: an existing rig keeps the runtime
 #                  it was created with.
+#   --reviewer-runtime R  what the reviewer runs: pi (default), codex or
+#                  claude-code. Pi has no sandbox, so a pi reviewer's read-only
+#                  rule is only its guidance; codex enforces it. New rigs only,
+#                  like --builder-runtime.
 #   -s, --seat     existing rig only: also give these builders a worktree of the
 #                  -r repos, e.g. -s b1,b2 or -s all (default: the lead only)
 #   --from-lead    used by add-repo.sh: print the news for the lead instead of
 #                  sending it, and leave the rig's running state alone
 #
 # The team: lead (claude) on <branch>, builders b1..bN (claude) on <branch>-bN,
-# the same branch names in every repo, and reviewer r1 (codex) read-only in the
+# the same branch names in every repo, and reviewer r1 (pi) read-only in the
 # lead's folder. Sessions are orch-lead@<rig>, dev-b1@<rig>, review-r1@<rig>.
 # With desktop and packages both in the rig, each seat's desktop is linked to
 # that seat's packages worktree (npm run link:ui), so package edits show up
@@ -69,7 +73,7 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 branch="" repo_args=() added=() builders=2 builders_given=false base="" brief_src="" rig_name=""
-builder_runtime=claude-code policy="builtin:auto" install=true plan=false from_lead=false edit_brief=false seat_args=""
+builder_runtime=claude-code reviewer_runtime=pi policy="builtin:auto" install=true plan=false from_lead=false edit_brief=false seat_args=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -85,6 +89,8 @@ while [ $# -gt 0 ]; do
     -s|--seat)     need_value "$@"; seat_args="$seat_args${seat_args:+,}$2"; shift 2 ;;
     --builder-runtime) need_value "$@"; builder_runtime="$2"; shift 2
                    case "$builder_runtime" in pi|claude-code|codex) ;; *) die "start-rig: --builder-runtime is claude-code, pi or codex" ;; esac ;;
+    --reviewer-runtime) need_value "$@"; reviewer_runtime="$2"; shift 2
+                   case "$reviewer_runtime" in pi|codex|claude-code) ;; *) die "start-rig: --reviewer-runtime is pi, codex or claude-code" ;; esac ;;
     --from-lead)   from_lead=true; shift ;;
     -h|--help)     sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)            die "start-rig: unknown option $1" ;;
@@ -506,7 +512,7 @@ to pick it up. An \`npm install\` in desktop undoes the link: re-link with
     echo "    members:"
     echo "      - id: r1"
     echo "        agent_ref: \"path:$agents/review/independent-reviewer\""
-    echo "        runtime: codex"
+    echo "        runtime: $reviewer_runtime"
     echo "        profile: default"
     echo "        cwd: \"$lead_dir\""
     echo "        startup:"
@@ -601,9 +607,12 @@ fi
 # (pi rewrites auth.json in place, which keeps the link). Done before every
 # launch, so a restored seat gets them too.
 if grep -q '^ *runtime: pi$' "$spec_dir/rig.yaml"; then
-  [ -f "$HOME/.pi/agent/auth.json" ] || warn "start-rig: no ~/.pi/agent/auth.json; sign pi in (pi, then /login) or the pi builders can't reach a model"
-  for seat in "${seats[@]:1}"; do
-    pi_dir="${OPENRIG_HOME:-$HOME/.openrig}/state/pi/dev-$seat@$rig_name/agent"
+  [ -f "$HOME/.pi/agent/auth.json" ] || warn "start-rig: no ~/.pi/agent/auth.json; sign pi in (pi, then /login) or the pi seats can't reach a model"
+  # <pod>-<member> of each pi seat in rig.yaml, as in its session name
+  awk '/^  - id: / { pod = $3 } /^      - id: / { member = $3 }
+       /^        runtime: pi$/ { print pod "-" member }' "$spec_dir/rig.yaml" |
+  while IFS= read -r session; do
+    pi_dir="${OPENRIG_HOME:-$HOME/.openrig}/state/pi/$session@$rig_name/agent"
     mkdir -p "$pi_dir"
     for f in auth.json settings.json extensions; do ln -sfn "$HOME/.pi/agent/$f" "$pi_dir/$f"; done
   done
