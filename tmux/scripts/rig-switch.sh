@@ -2,8 +2,8 @@
 # rig-switch.sh — get around OpenRig seats from tmux.
 #
 #   rig-switch.sh --open <client>        prefix+A: fzf popup of rig leads / seats
-#                                        (ctrl-q in it shows the seat's queue instead of
-#                                        its screen, ctrl-y copies the rig name)
+#                                        (^q in it shows the seat's queue instead of
+#                                        its screen, ^y copies the rig name)
 #   rig-switch.sh --last-lead <client>   prefix+g: back to the last lead you were in
 #   rig-switch.sh --next-input <client>  prefix+N: cycle the seats waiting on you
 #   rig-switch.sh --last-alert <client>  prefix+a: jump to the last agent that rang
@@ -178,6 +178,21 @@ queue_preview() {
       end' | cut -c1-400
 }
 
+# The key legend in fzf's footer: a pill for what the preview shows, then
+# keys (aqua) and what they do (grey). Everforest colours, as the alert menu.
+legend() {
+  local k=$'\033[1;38;2;131;192;146m' d=$'\033[38;2;133;146;137m' r=$'\033[0m' pill other
+  if [ -e "$RIG_SEL.queue" ]; then
+    pill=$'\033[1;38;2;35;42;46;48;2;219;188;127m QUEUE \033[0m' other=screen
+  else
+    pill=$'\033[1;38;2;35;42;46;48;2;167;192;128m SCREEN \033[0m' other=queue
+  fi
+  printf '%s  %s⏎%s go  %s←→%s seat  %s⇥%s leads/seats  %s⌥c%s rig seats\n' \
+    "$pill" "$k" "$d" "$k" "$d" "$k" "$d" "$k" "$d"
+  printf '%s^q%s %s  %s^y%s copy rig  %s^r%s refresh  %sesc%s close%s' \
+    "$k" "$d" "$other" "$k" "$d" "$k" "$d" "$k" "$d" "$r"
+}
+
 LEADS_PROMPT=' leads › '
 SEATS_PROMPT=' seats › '
 
@@ -205,11 +220,11 @@ case "$mode" in
     choice=$(lead_lines "$here_rig" | fzf "${hydrate[@]}" --ansi --delimiter '\t' --with-nth 3 \
       --no-sort --layout reverse --border rounded --border-label ' Rigs ' \
       --prompt "$LEADS_PROMPT" --info inline-right \
-      --header $'←/→ seat · tab leads/seats · alt-c rig\'s seats\nctrl-q queue · ctrl-y copy rig · ctrl-r refresh' \
+      --footer "$(legend)" --footer-border line \
       --preview "'$self' --preview {1}" \
       --preview-window 'right,50%,border-left' \
       --bind "focus:transform-preview-label('$self' --preview-label {1})" \
-      --bind "ctrl-q:execute-silent('$self' --preview-toggle)+toggle-preview-wrap+refresh-preview+transform-preview-label('$self' --preview-label {1})" \
+      --bind "ctrl-q:execute-silent('$self' --preview-toggle)+toggle-preview-wrap+refresh-preview+transform-preview-label('$self' --preview-label {1})+transform-footer('$self' --legend)" \
       --bind "tab:transform('$self' --view toggle)" \
       --bind "right:transform('$self' --view next {2})" \
       --bind "left:transform('$self' --view prev {2})" \
@@ -255,7 +270,8 @@ case "$mode" in
 
   --preview) preview "$2" ;;   # fzf preview, inside the popup
   --preview-label)
-    if [ -e "$RIG_SEL.queue" ]; then echo " $2 · queue "; else echo " $2 "; fi ;;
+    if [ -e "$RIG_SEL.queue" ]; then printf ' %s · \033[38;2;219;188;127mqueue\033[0m \n' "$2"; else echo " $2 "; fi ;;
+  --legend) legend ;;
   --preview-toggle)
     if [ -e "$RIG_SEL.queue" ]; then rm -f "$RIG_SEL.queue"; else : >"$RIG_SEL.queue"; fi ;;
 
