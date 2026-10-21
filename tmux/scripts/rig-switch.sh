@@ -2,7 +2,8 @@
 # rig-switch.sh — get around OpenRig seats from tmux.
 #
 #   rig-switch.sh --open <client>        prefix+A: fzf popup of rig leads / seats
-#                                        (ctrl-y in it copies the rig name to the laptop)
+#                                        (ctrl-q in it shows the seat's queue instead of
+#                                        its screen, ctrl-y copies the rig name)
 #   rig-switch.sh --last-lead <client>   prefix+g: back to the last lead you were in
 #   rig-switch.sh --next-input <client>  prefix+N: cycle the seats waiting on you
 #   rig-switch.sh --last-alert <client>  prefix+a: jump to the last agent that rang
@@ -142,6 +143,41 @@ lead_lines() {
     }' | sort -t $'\t' -k1,1nr | cut -f2-
 }
 
+# The preview: the seat's screen, or with ctrl-q its queue. The mode is a file
+# next to $RIG_SEL so the toggle and the focus label agree.
+preview() { # <session>
+  if [ -e "$RIG_SEL.queue" ]; then queue_preview "$1"; return; fi
+  tmux capture-pane -ep -t "$1" | awk 'NF{last=NR} {l[NR]=$0} END{for(i=1;i<=last;i++)print l[i]}' |
+    tail -n "${FZF_PREVIEW_LINES:-40}"
+}
+
+# What's queued for <session>: open items first with their body, then the last
+# few closed ones, one line each.
+queue_preview() {
+  rig queue list -A -a --full --json --destination "$1" --limit 30 </dev/null 2>/dev/null |
+  jq -r --arg now "$(date -u +%s)" --argjson cols "${FZF_PREVIEW_COLUMNS:-80}" '
+    def age: (($now | tonumber) - (sub("\\.[0-9]+Z$"; "Z") | fromdate)) as $s
+      | if $s < 3600 then "\($s / 60 | floor)m" elif $s < 86400 then "\($s / 3600 | floor)h"
+        else "\($s / 86400 | floor)d" end;
+    def who: split("@")[0] | sub("^[^-]*-"; "");
+    def line: (.summary // (.body | split("\n")[0]) // "" | .[0:200]);
+    (if type == "array" then . else [] end) as $all
+    | ($all | map(select(.state | IN("pending", "in-progress", "blocked")))) as $open
+    | ($all | map(select(.state | IN("pending", "in-progress", "blocked") | not))) as $done
+    | if ($all | length) == 0 then "\u001b[90mNothing queued for this seat\u001b[0m" else
+      (if ($open | length) == 0 then "\u001b[90mNothing open\u001b[0m\n" else empty end),
+      ($open[] |
+        ({pending: "\u001b[33m○ pending\u001b[0m", "in-progress": "\u001b[32m● working\u001b[0m",
+          blocked: "\u001b[31m■ blocked\u001b[0m"}[.state]) as $st
+        | "\($st)  \u001b[1m\(line)\u001b[0m",
+          "\u001b[90m  from \(.sourceSession | who) · \(.tsCreated | age) ago · \(.qitemId)\u001b[0m",
+          (if .blockedOn then "\u001b[31m  blocked on \(.blockedOn)\u001b[0m" else empty end),
+          (.body // "" | split("\n")[0:12][] | "  " + .), ""),
+      (if ($done | length) > 0 then "\u001b[90m── closed ──\u001b[0m" else empty end),
+      ($done[0:15][] | "\u001b[90m\(.tsUpdated | age | (. + "   ")[0:4]) \(.state | (. + "          ")[0:10]) \(line | .[0:($cols - 17)])\u001b[0m")
+      end' | cut -c1-400
+}
+
 LEADS_PROMPT=' leads › '
 SEATS_PROMPT=' seats › '
 
@@ -159,7 +195,7 @@ case "$mode" in
     case "$here" in *@*) here_rig="${here#*@}" ;; *) here_rig="" ;; esac
     export RIG_HERE="$here_rig"   # for --lines and --view, run by fzf
     RIG_SEL=$(mktemp "${TMPDIR:-/tmp}/rig-switch.XXXXXX") && export RIG_SEL
-    trap 'rm -f "$RIG_SEL"' EXIT
+    trap 'rm -f "$RIG_SEL" "$RIG_SEL.queue"' EXIT
     # Views and seat moves redraw from the saved states, so they're instant;
     # only refresh (ctrl-r, and once on open) waits for rig ps, and it keeps
     # the list up meanwhile. Before anything is saved, the first open waits.
@@ -169,10 +205,11 @@ case "$mode" in
     choice=$(lead_lines "$here_rig" | fzf "${hydrate[@]}" --ansi --delimiter '\t' --with-nth 3 \
       --no-sort --layout reverse --border rounded --border-label ' Rigs ' \
       --prompt "$LEADS_PROMPT" --info inline-right \
-      --header '←/→ seat · enter switch · tab leads/seats · alt-c rig'"'"'s seats · ctrl-y copy rig · ctrl-r refresh' \
-      --preview "tmux capture-pane -ep -t {1} | awk 'NF{last=NR} {l[NR]=\$0} END{for(i=1;i<=last;i++)print l[i]}' | tail -n \$FZF_PREVIEW_LINES" \
+      --header $'←/→ seat · tab leads/seats · alt-c rig\'s seats\nctrl-q queue · ctrl-y copy rig · ctrl-r refresh' \
+      --preview "'$self' --preview {1}" \
       --preview-window 'right,50%,border-left' \
-      --bind 'focus:transform-preview-label:echo " {1} "' \
+      --bind "focus:transform-preview-label('$self' --preview-label {1})" \
+      --bind "ctrl-q:execute-silent('$self' --preview-toggle)+toggle-preview-wrap+refresh-preview+transform-preview-label('$self' --preview-label {1})" \
       --bind "tab:transform('$self' --view toggle)" \
       --bind "right:transform('$self' --view next {2})" \
       --bind "left:transform('$self' --view prev {2})" \
@@ -215,6 +252,12 @@ case "$mode" in
       *)     echo "reload('$self' --lines seats)+change-prompt($SEATS_PROMPT)" ;;
     esac
     ;;
+
+  --preview) preview "$2" ;;   # fzf preview, inside the popup
+  --preview-label)
+    if [ -e "$RIG_SEL.queue" ]; then echo " $2 · queue "; else echo " $2 "; fi ;;
+  --preview-toggle)
+    if [ -e "$RIG_SEL.queue" ]; then rm -f "$RIG_SEL.queue"; else : >"$RIG_SEL.queue"; fi ;;
 
   --lines)  # reload source for the picker: leads | seats [<rig>]
     if [ "${2:-}" = leads ]; then lead_lines "${RIG_HERE:-}"; else seat_lines "${3:-}"; fi
