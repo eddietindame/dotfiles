@@ -31,7 +31,8 @@ case "$mode" in
     touch -t 200001010000 "$draft"
     # ZZ normally skips the write when nothing changed; here it always writes,
     # so a kept draft can be sent as it is. :cq saves the draft before leaving.
-    if ! nvim -c 'set wrap linebreak spell' -c 'nnoremap ZZ <Cmd>wq<CR>' \
+    # Your config, as zsh's nvim alias picks it; tmux runs this without it.
+    if ! NVIM_APPNAME="${NVIM_APPNAME:-nvim/kickstart-modular}" nvim -c 'set wrap linebreak spell' -c 'nnoremap ZZ <Cmd>wq<CR>' \
         -c 'autocmd VimLeavePre * if v:exiting != 0 | silent! write | endif' \
         -c 'startinsert!' "$draft"; then
       [ -s "$draft" ] && tmux display-message -c "$client" "compose: draft kept, not sent"
