@@ -8,7 +8,8 @@
 # with theirs. Written here, nothing sits in the pane's input box while you
 # type: agent messages arrive as normal, and yours is pasted whole when you
 # save and quit (:wq, or ZZ). :cq sends nothing and keeps the draft, one per
-# session, for the next prefix+e there; :q! sends nothing and drops it.
+# session, for the next prefix+e there (prefix+e again does the same, so it
+# toggles); :q! sends nothing and drops it.
 
 mode="${1:-}" client="${2:-}" pane="${3:-}"
 DRAFTS="${XDG_CACHE_HOME:-$HOME/.cache}/compose"
@@ -17,7 +18,7 @@ case "$mode" in
   --open)
     session=$(tmux display-message -p -t "$pane" '#{session_name}') || exit 0
     tmux display-popup -c "$client" -E -w 80% -h 50% -b rounded \
-      -T " to $session · :wq send · :cq keep draft · :q! discard " -s bg=terminal,fg=terminal \
+      -T " to $session · :wq send · :cq or prefix+e keep draft · :q! discard " -s bg=terminal,fg=terminal \
       "'$0' --edit '$client' '$pane'"
     ;;
 
@@ -31,11 +32,14 @@ case "$mode" in
     touch -t 200001010000 "$draft"
     # ZZ normally skips the write when nothing changed; here it always writes,
     # so a kept draft can be sent as it is. :cq saves the draft before leaving.
+    # Tmux bindings don't fire inside a popup, so prefix+e reaches nvim: there
+    # it closes the popup and keeps the draft, as :cq does.
     # Plain nvim plus only your keymaps: the full config's plugins are noise
     # here. -n: no swap file, so a reopened draft doesn't warn.
     keymaps="$HOME/.config/nvim/kickstart-modular/lua/keymaps.lua"
     if ! nvim --clean -n -c "lua vim.g.mapleader = ' '; pcall(dofile, '$keymaps')" \
         -c 'set wrap linebreak spell' -c 'nnoremap ZZ <Cmd>wq<CR>' \
+        -c 'for k in ["<C-Space>e", "<C-@>e", "<Nul>e"] | exe "noremap" k "<Cmd>cq<CR>" | exe "inoremap" k "<Cmd>cq<CR>" | endfor' \
         -c 'autocmd VimLeavePre * if v:exiting != 0 | silent! write | endif' \
         -c 'startinsert!' "$draft"; then
       [ -s "$draft" ] && tmux display-message -c "$client" "compose: draft kept, not sent"
