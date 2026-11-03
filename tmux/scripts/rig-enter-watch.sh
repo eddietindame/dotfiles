@@ -9,7 +9,7 @@
 # the message sits in the box until someone notices. Every few seconds this
 # looks at each rig seat's input box (between Claude's last two ─── rules: a
 # queued message sits above them and isn't touched). When the box holds only an
-# OpenRig message ("From: <seat>@<rig>" or "[OpenRig ...") and it hasn't
+# OpenRig message ("From: <seat>@<rig>", "[OpenRig ..." or, from 0.7.1, "Urgent (marked by ...") and it hasn't
 # changed since the last look, it presses Enter. Anything you've typed after it
 # changes the box, so a message you're adding to isn't sent until you stop
 # typing for a full interval; one that doesn't start like OpenRig's is never sent.
@@ -45,7 +45,7 @@ while tmux list-sessions >/dev/null 2>&1; do
     text=$(box "$pane") last="$SEEN/${pane#%}"
     first=${text%%$'\n'*}
     case "$first" in
-      "❯ From: "*@*|"❯ [OpenRig "*) ;;
+      "❯ From: "*@*|"❯ [OpenRig "*|"❯ Urgent (marked by "*) ;;
       *) rm -f "$last"; continue ;;
     esac
     if [ -f "$last" ] && [ "$(cat "$last")" = "$text" ]; then
