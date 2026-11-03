@@ -45,6 +45,25 @@ Run in your own worktree of each repo you changed:
 Report the actual result. A failure you did not cause is a finding for the
 lead, not something to fix inside your slice.
 
+## The Mac is shared: heavy commands take turns
+
+Every rig on this machine shares 16 GB of memory. A typecheck alone can take
+4 GB, and test suites, builds and Storybook or browser runs about as much. When
+several seats run theirs at once the Mac runs out of memory and kills
+processes, which has taken the whole machine down. So run every typecheck,
+test suite, lint of a whole repo, build, and any commit whose hook runs those,
+through the shared queue:
+
+```
+~/.config/openrig/scripts/heavy.sh pnpm typecheck
+~/.config/openrig/scripts/heavy.sh git commit -m "..."
+```
+
+At most two run at once across all rigs; yours waits its turn (it prints one
+line saying so) and then runs as normal, with the same output and exit status.
+Run one target's checks at a time rather than several in parallel, and don't
+start a heavy command in the background while another of yours is running.
+
 ## Lead-only files
 
 Only the lead edits these. A builder that needs a change in one of them asks
