@@ -60,7 +60,20 @@ case "$mode" in
         tmux display-message -c "$client" "compose: paste failed; draft kept"; exit 0; }
     sleep 0.3   # let the agent take the paste before Enter
     tmux send-keys -t "$pane" Enter
+    # Under load an agent can lose that Enter and leave the message in its
+    # input box. Check from outside the popup, so it closes now.
+    first=$(grep -m1 '[^[:space:]]' "$draft" | sed 's/^[[:space:]]*//' | cut -c1-30 | tr -d "'\\\\#")
     : >"$draft"
+    tmux run-shell -b "'$0' --check '$pane' '$first'"
+    ;;
+
+  --check)  # <pane> <first line>: press Enter again while the message is still in the box
+    pane="$2" first="$3"
+    for _ in 1 2 3; do
+      sleep 1
+      "$(dirname "$0")/rig-enter-watch.sh" --box "$pane" | grep -qF -e "$first" -e '[Pasted text' || break
+      tmux send-keys -t "$pane" Enter
+    done
     ;;
 
   *)
