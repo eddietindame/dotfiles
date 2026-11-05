@@ -4,7 +4,7 @@
 # for the layout).
 #
 #   start-rig.sh <branch> [-r REPOS] [-n BUILDERS] [-b BASE] [--brief FILE] [-e]
-#                [--name RIG] [--policy POLICY] [--no-install] [--plan]
+#                [--name RIG] [--policy POLICY] [--no-install] [--link-ui] [--plan]
 #                [-s SEATS] [--builder-runtime RUNTIME]
 #
 #   -r, --repo     comma-separated repos, by name or prefix: bd, bp, bw, bb, ba, bt
@@ -24,6 +24,7 @@
 #                  permission prompt nobody sees; a codex reviewer is at the
 #                  floor either way). See `rig policy list`.
 #   --no-install   skip npm/pnpm install in new worktrees
+#   --link-ui      link each seat's desktop to its own packages (see below)
 #   --plan         set everything up, then `rig up --plan` instead of launching
 #   --builder-runtime R  what the builders run: claude-code (default), pi or
 #                  codex. Builders use the most tokens, so they go on Claude
@@ -46,9 +47,13 @@
 # The team: lead (claude) on <branch>, builders b1..bN (claude) on <branch>-bN,
 # the same branch names in every repo, and reviewer r1 (pi) read-only in the
 # lead's folder. Sessions are orch-lead@<rig>, dev-b1@<rig>, review-r1@<rig>.
-# With desktop and packages both in the rig, each seat's desktop is linked to
-# that seat's packages worktree (npm run link:ui), so package edits show up
-# without a publish.
+# Desktop uses the published @bertie-technology/ui that its package.json pins.
+# With --link-ui and both repos in the rig, each seat's desktop is linked to that
+# seat's packages worktree instead (npm run link:ui), so ui edits show up in
+# desktop's dev server without a publish. The link is for the dev server only:
+# desktop's checks then break, since its typecheck wants ui's built dist/ and
+# ui's own React 19 sits beside desktop's React 18 (two Reacts in its tests).
+# So link only for a brief whose slices change ui.
 #
 # The rig launches without waiting for dependency installs; they finish in the
 # background (logs in .rig/logs/) and the lead is told when they're done.
@@ -73,7 +78,7 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 branch="" repo_args=() added=() builders=2 builders_given=false base="" brief_src="" rig_name=""
-builder_runtime=claude-code reviewer_runtime=pi policy="builtin:auto" install=true plan=false from_lead=false edit_brief=false seat_args=""
+builder_runtime=claude-code reviewer_runtime=pi policy="builtin:auto" install=true link_ui=false plan=false from_lead=false edit_brief=false seat_args=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -85,6 +90,7 @@ while [ $# -gt 0 ]; do
     --name)        need_value "$@"; rig_name="$2"; shift 2 ;;
     --policy)      need_value "$@"; policy="$2"; shift 2 ;;
     --no-install)  install=false; shift ;;
+    --link-ui)     link_ui=true; shift ;;
     --plan)        plan=true; shift ;;
     -s|--seat)     need_value "$@"; seat_args="$seat_args${seat_args:+,}$2"; shift 2 ;;
     --builder-runtime) need_value "$@"; builder_runtime="$2"; shift 2
@@ -98,7 +104,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$branch" ] || die "usage: start-rig <branch> [-r REPOS] [-n BUILDERS] [-b BASE] [--brief FILE] [--name RIG] [--policy P] [--no-install] [--plan]"
+[ -n "$branch" ] || die "usage: start-rig <branch> [-r REPOS] [-n BUILDERS] [-b BASE] [--brief FILE] [--name RIG] [--policy P] [--no-install] [--link-ui] [--plan]"
 case "$builders" in ''|*[!0-9]*|0) die "start-rig: -n wants a number of builders, 1 or more" ;; esac
 [ -z "$brief_src" ] || [ -f "$brief_src" ] || die "start-rig: no such brief: $brief_src"
 command -v rig >/dev/null || die "start-rig: rig not on PATH"
@@ -314,7 +320,7 @@ run_installs() {
 # line per seat that couldn't be linked.
 link_seats() {
   local seat desk pkgs
-  has_repo bertie-desktop && has_repo bertie-packages || return 0
+  $linked || return 0
   for seat in "${seats[@]}"; do
     desk="$rig_dir/$seat/bertie-desktop"
     pkgs="$rig_dir/$seat/bertie-packages"
@@ -332,7 +338,7 @@ link_seats() {
 # The culture says desktop is linked wherever a seat has both; link_seats
 # reports the seats where that didn't work.
 linked=false
-has_repo bertie-desktop && has_repo bertie-packages && linked=true
+$link_ui && has_repo bertie-desktop && has_repo bertie-packages && linked=true
 
 background_installs=false
 if [ ${#to_install[@]} -gt 0 ] && ! $plan && ! $from_lead; then
@@ -436,11 +442,21 @@ if [ ! -f "$spec_dir/rig.yaml" ] || $changed; then
 }"
 
   link_note=""
+  has_repo bertie-desktop && has_repo bertie-packages && ! $linked && link_note="Desktop uses the published \`@bertie-technology/ui\` its package.json pins, not
+your \`bertie-packages\`, so desktop's checks run as they do in CI. A slice that
+changes a ui component needs it published first (a prerelease the lead asks
+the human for), or the lead can link desktop to your packages
+(\`npm run link:ui -- ../bertie-packages\`): that works for desktop's dev
+server, but desktop's typecheck and tests then fail until ui is built and
+desktop dedupes React (ui brings React 19, desktop is on 18)."
   $linked && link_note="If your folder has both, your \`bertie-desktop\` is linked to your own \`bertie-packages\`
 (\`node_modules/@bertie-technology/ui\` points at its \`packages/internal/ui\`), so
 a package edit shows up in desktop straight away; restart desktop's dev server
-to pick it up. An \`npm install\` in desktop undoes the link: re-link with
-\`npm run link:ui -- ../bertie-packages\` from desktop."
+to pick it up. Desktop's typecheck and tests don't work while it's linked
+(they want ui's built dist/, and ui's React 19 clashes with desktop's 18): run
+them after \`npm run link:ui -- --unlink\`, which puts the published copy back,
+and re-link with \`npm run link:ui -- ../bertie-packages\`. An \`npm install\` in
+desktop also undoes the link."
 
   tf_note=""
   has_repo bertie-terraform && tf_note="- \`bertie-terraform\` is real infrastructure. Never run \`terraform apply\`,
