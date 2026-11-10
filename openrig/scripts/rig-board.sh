@@ -42,7 +42,7 @@ them where the rig is. Write exactly this markdown and nothing else:
 <headline, at most 8 words, on its own line, no # and no rig name>
 <At most two short sentences, 40 words in all: what is happening now and what comes next, or what it is stuck on.>
 **You:** <only if the human must decide or do something: the ask in at most 20 words, several asks separated by " · ". Leave this line out entirely otherwise.>
-**PRs:** <open PRs from the PRs section on ONE line, exactly like "desktop #1431 ✗ · packages #371 ⏳ · web #183 draft ✗" (✓ checks passing, ✗ failing, ⏳ pending). Never titles, never URLs, never bullets. With more than five open, summarise instead, e.g. "17 drafts in 4 repos, most failing". Leave this line out if none are open.>
+**PRs:** <open PRs from the PRs section on ONE line, exactly like "desktop #1431 ✗ · packages #371 ○ · web #183 draft ✗" (✓ checks passing, ✗ failing, ○ pending). Never titles, never URLs, never bullets. With more than five open, summarise instead, e.g. "17 drafts in 4 repos, most failing". Leave this line out if none are open.>
 
 Plain language. No queue ids, hashes, file paths or seat names unless essential.
 Prefer the newest information: the lead's screen and the end of the progress
@@ -222,7 +222,7 @@ rigw = min(max(len(r[0]) for r in rows), 26)
 refw = max(len("%s #%s" % (r[1], r[2])) for r in rows)
 for rig, repo, num, title, state, checks, url in rows:
     mark = (green + "✓" if checks == "passing" else red + "✗" if "failing" in checks
-            else yellow + "⏳" if "pending" in checks else dim + "·") + off
+            else yellow + "○" if "pending" in checks else dim + "·") + off
     tag = {"draft": dim + "draft ", "merged": magenta + "merged", "closed": dim + "closed"}.get(state, "      ") + off
     room = max(cols - rigw - refw - 20, 20)
     title = title if len(title) <= room else title[: room - 1] + "…"
