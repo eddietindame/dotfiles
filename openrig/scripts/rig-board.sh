@@ -174,9 +174,9 @@ for r in (d if isinstance(d, list) else d.get("rigs", [])):
     [ -s "$DIR/$rig.md" ] || continue
     sections+="### $rig · $(grep -m1 -v '^[[:space:]]*$' "$DIR/$rig.md" | sed 's/^#* *//')"$'\n'
     sections+="$(grep -v '^[[:space:]]*$' "$DIR/$rig.md" | sed 1d | grep -v '^\*\*You:\*\*')"$'\n\n'
-    # Links for the board's picker: "rig  repo #N title (state)<TAB>url"
+    # PR links for the board's picker: rig, repo, number, title, state, checks, url
     sed -n '/^## PRs$/,/^## /p' "$DIR/$rig.key" | grep '^- ' |
-      sed -E "s|^- ([^ ]+) (#[0-9]+) (.*): ([a-z]+), checks ([^,]+), review [^,]+, (https://[^ ]+)$|$rig  \1 \2 \3 (\4, \5)\t\6|; s|  bertie-|  |" |
+      sed -E "s|^- bertie-|- |; s|^- ([^ ]+) #([0-9]+) (.*): ([a-z]+), checks ([^,]+), review [^,]+, (https://[^ ]+)$|$rig\t\1\t\2\t\3\t\4\t\5\t\6|" |
       grep $'\t' >>"$DIR/links.tmp"
     local n
     n=$(grep -m1 '^\*\*You:\*\*' "$DIR/$rig.md" | sed 's/^\*\*You:\*\* *//')
@@ -206,8 +206,30 @@ case "${1:-}" in
   --view)   # the board above, its PR links below: type to filter, enter opens
     [ -s "$BOARD" ] || { echo "No board yet: it's being written (takes a minute or two)."; read -r -n1; exit; }
     tmux_scripts="$HOME/.config/tmux/scripts"
-    { cut -f1,2 "$DIR/links.tsv" 2>/dev/null; [ -s "$DIR/links.tsv" ] || printf 'no PR links\t\n'; } | sed 's/^/  /' |
-      fzf --ansi --delimiter=$'\t' --with-nth=1 --layout=reverse --no-sort \
+    python3 - "$DIR/links.tsv" "$(tput cols 2>/dev/null || echo 120)" <<'PY' |
+import sys
+path, cols = sys.argv[1], int(sys.argv[2])
+try: rows = [l.rstrip("\n").split("\t") for l in open(path)]
+except OSError: rows = []
+import re
+rows = [[re.sub(r"^[a-z]+-\d+-", "", r[0])] + r[1:] for r in rows if len(r) == 7]   # ber-827-x → x
+if not rows:
+    print("  no PR links\t"); sys.exit()
+dim, red, green, yellow, magenta, bold, off = "\033[2m", "\033[31m", "\033[32m", "\033[33m", "\033[35m", "\033[1m", "\033[0m"
+order = {"open": 0, "draft": 1, "merged": 2, "closed": 3}
+rows.sort(key=lambda r: (r[0], order.get(r[4], 9), r[1], -int(r[2])))
+rigw = min(max(len(r[0]) for r in rows), 26)
+refw = max(len("%s #%s" % (r[1], r[2])) for r in rows)
+for rig, repo, num, title, state, checks, url in rows:
+    mark = (green + "✓" if checks == "passing" else red + "✗" if "failing" in checks
+            else yellow + "⏳" if "pending" in checks else dim + "·") + off
+    tag = {"draft": dim + "draft ", "merged": magenta + "merged", "closed": dim + "closed"}.get(state, "      ") + off
+    room = max(cols - rigw - refw - 20, 20)
+    title = title if len(title) <= room else title[: room - 1] + "…"
+    ref = "%s #%s" % (repo, num)
+    print("%s%-*s%s  %s %s  %s%-*s%s  %s\t%s" % (dim, rigw, rig[:rigw], off, mark, tag, bold, refw, ref, off, title, url))
+PY
+      fzf --ansi --delimiter=$'\t' --with-nth=1 --layout=reverse --no-sort --tiebreak=index \
         --preview "CLICOLOR_FORCE=1 glow -s dark -w \$((FZF_PREVIEW_COLUMNS - 2)) '$BOARD'" \
         --preview-window 'up,75%,border-bottom' \
         --prompt '  link › ' --info=hidden \
