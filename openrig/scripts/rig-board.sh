@@ -206,9 +206,9 @@ case "${1:-}" in
   --view)   # the board above, its PR links below: type to filter, enter opens
     [ -s "$BOARD" ] || { echo "No board yet: it's being written (takes a minute or two)."; read -r -n1; exit; }
     tmux_scripts="$HOME/.config/tmux/scripts"
-    python3 - "$DIR/links.tsv" "$(tput cols 2>/dev/null || echo 120)" <<'PY' |
+    python3 - "$DIR/links.tsv" <<'PY' |
 import sys
-path, cols = sys.argv[1], int(sys.argv[2])
+path = sys.argv[1]   # long titles: fzf cuts them at the panel's edge
 try: rows = [l.rstrip("\n").split("\t") for l in open(path)]
 except OSError: rows = []
 import re
@@ -224,8 +224,6 @@ for rig, repo, num, title, state, checks, url in rows:
     mark = (green + "✓" if checks == "passing" else red + "✗" if "failing" in checks
             else yellow + "○" if "pending" in checks else dim + "·") + off
     tag = {"draft": dim + "draft ", "merged": magenta + "merged", "closed": dim + "closed"}.get(state, "      ") + off
-    room = max(cols - rigw - refw - 20, 20)
-    title = title if len(title) <= room else title[: room - 1] + "…"
     ref = "%s #%s" % (repo, num)
     print("%s%-*s%s  %s %s  %s%-*s%s  %s\t%s" % (dim, rigw, rig[:rigw], off, mark, tag, bold, refw, ref, off, title, url))
 PY
