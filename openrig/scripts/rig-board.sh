@@ -39,8 +39,9 @@ bottom), the start of the brief, open queue items, recent commits, PRs, and the
 last lines of the lead's screen. The human wants the least text that tells
 them where the rig is. Write exactly this markdown and nothing else:
 
-<headline, at most 8 words, on its own line, no # and no rig name>
-<At most two short sentences, 40 words in all: what is happening now and what comes next, or what it is stuck on.>
+<one status emoji, a space, then a headline of at most 8 words; on its own line, no # and no rig name. The emoji: 🙋 waiting on the human, 🔴 stuck or failing, 🟡 waiting on checks or other people, 🟢 moving along, ✅ ready to merge or done>
+_<the feature in plain words, at most 20 words: what it changes for users or the team, and which part of the product. From the brief. In underscores, on its own line.>_
+<At most two short sentences, 40 words in all: where the feature has got to (which parts are done, which are left) and what is happening now or what it is stuck on.>
 **You:** <only if the human must decide or do something: the ask in at most 20 words, several asks separated by " · ". Leave this line out entirely otherwise.>
 **PRs:** <open PRs from the PRs section on ONE line, exactly like "desktop #1431 ✗ · packages #371 ○ · web #183 draft ✗" (✓ checks passing, ✗ failing, ○ pending). Never titles, never URLs, never bullets. With more than five open, summarise instead, e.g. "17 drafts in 4 repos, most failing". Leave this line out if none are open.>
 
@@ -172,8 +173,12 @@ for r in (d if isinstance(d, list) else d.get("rigs", [])):
       fi
     fi
     [ -s "$DIR/$rig.md" ] || continue
-    sections+="### $rig · $(grep -m1 -v '^[[:space:]]*$' "$DIR/$rig.md" | sed 's/^#* *//')"$'\n'
-    sections+="$(grep -v '^[[:space:]]*$' "$DIR/$rig.md" | sed 1d | grep -v '^\*\*You:\*\*')"$'\n\n'
+    local head emo
+    head=$(grep -m1 -v '^[[:space:]]*$' "$DIR/$rig.md" | sed 's/^#* *//')
+    emo=${head%% *}; head=${head#* }   # the status emoji leads the heading
+    sections+="### $emo $rig · $head"$'\n'
+    sections+="$(grep -v '^[[:space:]]*$' "$DIR/$rig.md" | sed 1d | grep -v '^\*\*You:\*\*' |
+      sed 's/^_/🎯 _/; s/^\*\*PRs:\*\*/🔀 **PRs:**/')"$'\n\n'
     # PR links for the board's picker: rig, repo, number, title, state, checks, url
     sed -n '/^## PRs$/,/^## /p' "$DIR/$rig.key" | grep '^- ' |
       sed -E "s|^- bertie-|- |; s|^- ([^ ]+) #([0-9]+) (.*): ([a-z]+), checks ([^,]+), review [^,]+, (https://[^ ]+)$|$rig\t\1\t\2\t\3\t\4\t\5\t\6|" |
@@ -183,9 +188,9 @@ for r in (d if isinstance(d, list) else d.get("rigs", [])):
     [ -z "$n" ] || needs+="- **${rig}**: $n"$'\n'
   done
   {
-    echo "# Rigs · updated $(date '+%H:%M')"
+    echo "# 🧭 Rigs · updated $(date '+%H:%M')"
     echo
-    if [ -n "$needs" ]; then echo "## Needs you"; echo; printf '%s\n' "$needs"; else echo "_Nothing needs you._"; echo; fi
+    if [ -n "$needs" ]; then echo "## 🙋 Needs you"; echo; printf '%s\n' "$needs"; else echo "_Nothing needs you._"; echo; fi
     echo "---"; echo
     printf '%s' "$sections"
   } >"$BOARD.tmp" && mv "$BOARD.tmp" "$BOARD"
@@ -228,7 +233,7 @@ for rig, repo, num, title, state, checks, url in rows:
     print("%s%-*s%s  %s %s  %s%-*s%s  %s\t%s" % (dim, rigw, rig[:rigw], off, mark, tag, bold, refw, ref, off, title, url))
 PY
       fzf --ansi --delimiter=$'\t' --with-nth=1 --layout=reverse --no-sort --tiebreak=index \
-        --preview "CLICOLOR_FORCE=1 glow -s dark -w \$((FZF_PREVIEW_COLUMNS - 2)) '$BOARD'" \
+        --preview "CLICOLOR_FORCE=1 glow -s '$HOME/.config/glow/rig-board.json' -w \$((FZF_PREVIEW_COLUMNS - 2)) '$BOARD' </dev/null" \
         --preview-window 'up,75%,border-bottom' \
         --prompt '  link › ' --info=hidden \
         --header 'enter open on laptop · ctrl-y copy · ↑↓ pick · mouse/shift-↑↓ scroll board · esc close' \
