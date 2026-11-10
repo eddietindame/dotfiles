@@ -38,12 +38,15 @@ file, plus a note on how it differs there, and copies of your `BRIEF.md` and
 It's a builder like the others, addressed with `--host laptop`:
 
 ```
-offload.sh sync <rig> x1                        # first, if BRIEF.md / PROGRESS.md changed
 rig queue create --host laptop --destination dev-x1@<rig>-x1 --summary "..." --body-file slice.md
 rig send dev-x1@<rig>-x1 --host laptop "..."
 rig capture dev-x1@<rig>-x1 --host laptop       # read its screen
 offload.sh status <rig>
 ```
+
+Your `BRIEF.md` and `PROGRESS.md` are copied to it within a minute of every
+change, and it's told when the brief changes; `offload.sh sync <rig> x1` copies
+them straight away if it can't wait.
 
 It reports to you with `rig send ... --host mini`, starting its messages with
 its seat name. A watcher on the mini also messages you if the laptop seat needs

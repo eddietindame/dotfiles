@@ -5,10 +5,12 @@
 #                                       every repo in the lead's folder); prints
 #                                       its seat, e.g. dev-x1@<rig>-x1 on host laptop
 #   offload.sh fetch <rig> <xN>         bring its branch, <branch>-xN, into the lead's repos
-#   offload.sh sync <rig> <xN>          copy the lead's BRIEF.md and PROGRESS.md to it
+#   offload.sh sync <rig> <xN>          copy the lead's BRIEF.md and PROGRESS.md to it now
+#                                       (the watcher does this within a minute of a change)
 #   offload.sh status [<rig>]           the laptop builders and what they're doing
 #   offload.sh done <rig> <xN>          fetch, then stop and remove that laptop builder
-#   offload.sh watch <rig> <xN>         (started by start) tell the lead when it needs you
+#   offload.sh watch <rig> <xN>         (started by start) tell the lead when it needs
+#                                       you, and keep its BRIEF.md / PROGRESS.md copies current
 #
 # The mini has 16 GB and its rigs share it; the laptop has 64 GB. A laptop
 # builder is a one-seat rig on the laptop's own OpenRig daemon, in
@@ -27,7 +29,7 @@ set -euo pipefail
 LAPTOP=eddietindame@100.86.187.87   # as in tmux/scripts/agent-notify.sh
 HOST=laptop                         # its id in the mini's ~/.openrig/hosts.yaml
 RIGS="$HOME/Documents/bertie-rigs"
-POLL=60                             # seconds between the watcher's looks
+POLL="${OFFLOAD_POLL:-60}"   # seconds between the watcher's looks
 
 say()  { printf '%s\n' "$*"; }
 die()  { printf 'offload: %s\n' "$*" >&2; exit 1; }
@@ -43,7 +45,7 @@ load_rig() { # <rig>: RIG_DIR, BRANCH and the lead's folder from the rig's .rig/
   mkdir -p "$state"
 }
 
-usage() { sed -n '3,10p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '3,12p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 cmd="${1:-}"; [ $# -gt 0 ] && shift
 case "$cmd" in
@@ -130,9 +132,9 @@ below the line is $rig's own culture file: follow it, with these differences.
   everything the lead has merged on the mini.
 - The laptop has plenty of memory: you don't need the culture's heavy.sh.
 - Never push anywhere. The mini fetches from you.
-- The lead's \`BRIEF.md\` and \`PROGRESS.md\` are copied to
-  \`$home/$dir\` when the lead assigns you work. Read them there; they are
-  copies, so don't edit them.
+- The lead's \`BRIEF.md\` and \`PROGRESS.md\` are in \`$home/$dir\`, copied
+  from the mini within a minute of every change; you're told when the brief
+  changes. They are copies, so don't edit them: ask the lead.
 
 ---
 
@@ -154,7 +156,7 @@ EOF
     say "offload: $seat is up on the laptop. Assign it work like any builder, with --host laptop:"
     say "  rig queue create --host $HOST --destination $seat --summary '...' --body-file <slice.md>"
     say "  rig send $seat --host $HOST '...'      rig capture $seat --host $HOST"
-    say "Run offload.sh sync $rig $x first whenever BRIEF.md or PROGRESS.md has changed."
+    say "Your BRIEF.md and PROGRESS.md follow it to the laptop within a minute of each change."
     say "When it hands a slice back: offload.sh fetch $rig $x, then review $branch as usual."
     say "Finished with it: offload.sh done $rig $x"
     ;;
@@ -202,7 +204,17 @@ EOF
     load_rig "$1"; x="$2" name="$1-$2" seat="dev-$2@$1-$2"
     lead="orch-lead@$rig" was="" down=0
     tell() { rig send "$lead" "offload watcher: $*" >/dev/null 2>&1 || true; }
+    stamp() { stat -f %m "$lead_dir/$1" 2>/dev/null || echo 0; }
+    brief=$(stamp BRIEF.md) progress=$(stamp PROGRESS.md)   # start copied them
     while [ -f "$state/$x.rig" ]; do
+      # Keep the laptop's copies of the lead's files current. A changed brief
+      # can change the work, so the builder is told; PROGRESS.md just follows.
+      if [ "$(stamp BRIEF.md)$(stamp PROGRESS.md)" != "$brief$progress" ] && "$0" sync "$rig" "$x" >/dev/null 2>&1; then
+        if [ "$(stamp BRIEF.md)" != "$brief" ]; then
+          rig send "$seat" --host "$HOST" "offload watcher: the lead's BRIEF.md has changed; re-read the copy in your rig folder (../BRIEF.md from your seat) before your next step." >/dev/null 2>&1 || true
+        fi
+        brief=$(stamp BRIEF.md) progress=$(stamp PROGRESS.md)
+      fi
       if json=$(rig ps --host "$HOST" --nodes --rig "$name" --json 2>/dev/null); then
         [ "$down" -ge 5 ] && tell "the laptop is reachable again; $seat is back in view."
         down=0
