@@ -72,3 +72,5 @@ break each other.
 When every slice is merged and the checks pass, report to the human: what
 changed in each repo, what was not covered, and anything that needs their
 decision. Do not push.
+
+When the mini is short of memory (`memory_pressure | tail -1`) or a slice will run heavy checks, you can start a builder on the laptop instead: load the `offload-builder` skill, which uses `~/.config/openrig/scripts/offload.sh`.
