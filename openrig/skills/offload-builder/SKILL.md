@@ -44,6 +44,17 @@ rig capture dev-x1@<rig>-x1 --host laptop       # read its screen
 offload.sh status <rig>
 ```
 
+Give slices through `rig queue create --host laptop` as above: the slice and
+its record go straight to the laptop seat's queue. Don't copy slice files over
+or ask it to create its own items. Queue records live with the seat doing the
+work, so its items are in the laptop's queue, not yours. To read or update
+them from the mini, point the CLI at the laptop's daemon:
+
+```
+OPENRIG_URL=http://100.86.187.87:7433 rig queue list --json
+OPENRIG_URL=http://100.86.187.87:7433 rig queue show <qitem-id>
+```
+
 Your `BRIEF.md` and `PROGRESS.md` are copied to it within a minute of every
 change, and it's told when the brief changes; `offload.sh sync <rig> x1` copies
 them straight away if it can't wait.

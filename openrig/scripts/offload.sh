@@ -22,12 +22,15 @@
 # the laptop seat needs attention, as a local seat's alerts would.
 #
 # Both machines know each other as OpenRig hosts (rig host list): `laptop` on
-# the mini, `mini` on the laptop, both over ssh with keys.
+# the mini, `mini` on the laptop, over http to each daemon's Tailscale address
+# (http, not ssh, because cross-host queue writes need it). This script's own
+# setup and git traffic uses ssh with keys.
 
 set -euo pipefail
 
 LAPTOP=eddietindame@100.86.187.87   # as in tmux/scripts/agent-notify.sh
 HOST=laptop                         # its id in the mini's ~/.openrig/hosts.yaml
+laptop_url() { echo "http://${LAPTOP#*@}:7433"; }   # its daemon, as registered there
 RIGS="$HOME/Documents/bertie-rigs"
 POLL="${OFFLOAD_POLL:-60}"   # seconds between the watcher's looks
 
@@ -156,6 +159,7 @@ EOF
     say "offload: $seat is up on the laptop. Assign it work like any builder, with --host laptop:"
     say "  rig queue create --host $HOST --destination $seat --summary '...' --body-file <slice.md>"
     say "  rig send $seat --host $HOST '...'      rig capture $seat --host $HOST"
+    say "  OPENRIG_URL=$(laptop_url) rig queue list --json   # read the laptop's queue"
     say "Your BRIEF.md and PROGRESS.md follow it to the laptop within a minute of each change."
     say "When it hands a slice back: offload.sh fetch $rig $x, then review $branch as usual."
     say "Finished with it: offload.sh done $rig $x"
