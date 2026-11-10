@@ -18,7 +18,7 @@ case "$mode" in
   --open)
     session=$(tmux display-message -p -t "$pane" '#{session_name}') || exit 0
     tmux display-popup -c "$client" -E -w 80% -h 50% -b rounded \
-      -T " to $session · :wq or prefix+⏎ send · :cq or prefix+e keep draft · :q! discard " -s bg=terminal,fg=terminal \
+      -T " to $session · :wq or prefix+⏎ send · :cq or prefix+e keep draft · :q! discard " \
       "'$0' --edit '$client' '$pane'"
     ;;
 

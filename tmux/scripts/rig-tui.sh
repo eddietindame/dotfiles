@@ -36,7 +36,7 @@ if [ "${1:-}" = "--toggle" ]; then
   # the popup closes with the TUI.
   tmux set -t "$SESSION" detach-on-destroy on
   tmux display-popup -c "$client" -E -w 90% -h 90% -b rounded -T ' OpenRig ' \
-    -s bg=terminal,fg=terminal "TMUX= tmux attach -t '=$SESSION'"
+    "TMUX= tmux attach -t '=$SESSION'"
   exit 0
 fi
 
