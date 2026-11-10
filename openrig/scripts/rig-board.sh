@@ -36,17 +36,15 @@ current, and say what is actually happening, not who is idle.
 
 Below is the raw state of one rig: the lead's progress log (most recent at the
 bottom), the start of the brief, open queue items, recent commits, PRs, and the
-last lines of the lead's screen. Write exactly this markdown and nothing else:
+last lines of the lead's screen. The human wants the least text that tells
+them where the rig is. Write exactly this markdown and nothing else:
 
-### <rig name>: <headline, at most 10 words: the stage it's at>
-**Goal:** <one short sentence: what this rig is for>
-**Now:** <1-2 sentences: what is being worked on at this moment, and by whom>
-**Done lately:** <one sentence on the most recent finished work>
-**Next:** <one sentence: what happens next, or what it is waiting for>
-**Needs you:** <the specific decision or action the human must take, quoting the question if the lead asked one; or "nothing">
-**PRs:** <one bullet per PR in the PRs section, as "repo #N short title: state, checks, review, URL"; merged ones last; or "none". With more than six, one bullet per repo instead, summarising state and checks and listing the numbers. Never list a PR that isn't in the PRs section.>
+<headline, at most 8 words, on its own line, no # and no rig name>
+<At most two short sentences, 40 words in all: what is happening now and what comes next, or what it is stuck on.>
+**You:** <only if the human must decide or do something: the ask in at most 20 words, several asks separated by " · ". Leave this line out entirely otherwise.>
+**PRs:** <open PRs from the PRs section on ONE line, exactly like "desktop #1431 ✗ · packages #371 ⏳ · web #183 draft ✗" (✓ checks passing, ✗ failing, ⏳ pending). Never titles, never URLs, never bullets. With more than five open, summarise instead, e.g. "17 drafts in 4 repos, most failing". Leave this line out if none are open.>
 
-Plain language. No queue ids, no commit hashes, no file paths unless essential.
+Plain language. No queue ids, hashes, file paths or seat names unless essential.
 Prefer the newest information: the lead's screen and the end of the progress
 log beat older entries. If something is stuck or failing, say so plainly.
 EOF
@@ -144,6 +142,7 @@ fetch_prs() {
 update() {
   local d rig now running out sections="" needs=""
   now=$(date +%s)
+  : >"$DIR/links.tmp"
   fetch_prs
   running=$(rig ps --json 2>/dev/null | python3 -c '
 import json, sys
@@ -173,10 +172,15 @@ for r in (d if isinstance(d, list) else d.get("rigs", [])):
       fi
     fi
     [ -s "$DIR/$rig.md" ] || continue
-    sections+="$(cat "$DIR/$rig.md")"$'\n\n'
+    sections+="### $rig · $(grep -m1 -v '^[[:space:]]*$' "$DIR/$rig.md" | sed 's/^#* *//')"$'\n'
+    sections+="$(grep -v '^[[:space:]]*$' "$DIR/$rig.md" | sed 1d | grep -v '^\*\*You:\*\*')"$'\n\n'
+    # Links for the board's picker: "rig  repo #N title (state)<TAB>url"
+    sed -n '/^## PRs$/,/^## /p' "$DIR/$rig.key" | grep '^- ' |
+      sed -E "s|^- ([^ ]+) (#[0-9]+) (.*): ([a-z]+), checks ([^,]+), review [^,]+, (https://[^ ]+)$|$rig  \1 \2 \3 (\4, \5)\t\6|; s|  bertie-|  |" |
+      grep $'\t' >>"$DIR/links.tmp"
     local n
-    n=$(grep -m1 '^\*\*Needs you:\*\*' "$DIR/$rig.md" | sed 's/^\*\*Needs you:\*\* *//')
-    case "$n" in ""|[Nn]othing*) ;; *) needs+="- **$rig**: $n"$'\n' ;; esac
+    n=$(grep -m1 '^\*\*You:\*\*' "$DIR/$rig.md" | sed 's/^\*\*You:\*\* *//')
+    [ -z "$n" ] || needs+="- **${rig}**: $n"$'\n'
   done
   {
     echo "# Rigs · updated $(date '+%H:%M')"
@@ -185,6 +189,7 @@ for r in (d if isinstance(d, list) else d.get("rigs", [])):
     echo "---"; echo
     printf '%s' "$sections"
   } >"$BOARD.tmp" && mv "$BOARD.tmp" "$BOARD"
+  mv "$DIR/links.tmp" "$DIR/links.tsv"
 }
 
 case "${1:-}" in
@@ -198,8 +203,18 @@ case "${1:-}" in
   --once) lockf -t 600 "$DIR/lock" "$0" --update ;;
   --update) update ;;
   --state) fetch_prs; rig_state "$2" ;;   # debugging: what the summariser sees for one rig
-  --view)
+  --view)   # the board above, its PR links below: type to filter, enter opens
     [ -s "$BOARD" ] || { echo "No board yet: it's being written (takes a minute or two)."; read -r -n1; exit; }
-    glow --config "$HOME/.config/glow/glow.yml" -p "$BOARD" 2>/dev/null || less -R "$BOARD" ;;
+    tmux_scripts="$HOME/.config/tmux/scripts"
+    { cut -f1,2 "$DIR/links.tsv" 2>/dev/null; [ -s "$DIR/links.tsv" ] || printf 'no PR links\t\n'; } | sed 's/^/  /' |
+      fzf --ansi --delimiter=$'\t' --with-nth=1 --layout=reverse --no-sort \
+        --preview "CLICOLOR_FORCE=1 glow -s dark -w \$((FZF_PREVIEW_COLUMNS - 2)) '$BOARD'" \
+        --preview-window 'up,75%,border-bottom' \
+        --prompt '  link › ' --info=hidden \
+        --header 'enter open on laptop · ctrl-y copy · ↑↓ pick · mouse/shift-↑↓ scroll board · esc close' \
+        --bind "enter:execute-silent('$tmux_scripts/open-on-laptop.sh' {2})" \
+        --bind "ctrl-y:execute-silent(printf %s {2} | '$tmux_scripts/copy-on-laptop.sh')" \
+        --bind 'shift-up:preview-up,shift-down:preview-down,pgup:preview-page-up,pgdn:preview-page-down' >/dev/null
+    ;;
   *) echo "usage: $(basename "$0") --start | --once | --view" >&2; exit 2 ;;
 esac
