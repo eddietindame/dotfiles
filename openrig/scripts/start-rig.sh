@@ -637,7 +637,9 @@ fi
 state=$(rig ps --json 2>/dev/null | jq -r --arg n "$rig_name" 'map(select(.name == $n))[0].status // empty' || true)
 case "$state" in
   "")      rig up "$spec_dir/rig.yaml" ;;
-  stopped) rig up "$rig_name" --existing; tell_lead ;;
+  # From 0.7 a partial restore exits 1; the seats that did come back still
+  # need telling, and rig up has already said which didn't.
+  stopped) rig up "$rig_name" --existing || warn "start-rig: $rig_name came back only partly; see above, and rig ps --nodes --rig $rig_name"; tell_lead ;;
   *)       say "start-rig: $rig_name is already $state"; tell_lead ;;
 esac
 
