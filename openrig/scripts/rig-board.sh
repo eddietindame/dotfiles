@@ -232,7 +232,7 @@ for rig, repo, num, title, state, checks, url in rows:
     ref = "%s #%s" % (repo, num)
     print("%s%-*s%s  %s %s  %s%-*s%s  %s\t%s" % (dim, rigw, rig[:rigw], off, mark, tag, bold, refw, ref, off, title, url))
 PY
-      fzf --ansi --delimiter=$'\t' --with-nth=1 --layout=reverse --no-sort --tiebreak=index \
+      fzf --ansi --exact --ignore-case --delimiter=$'\t' --with-nth=1 --layout=reverse --no-sort --tiebreak=index \
         --preview "CLICOLOR_FORCE=1 glow -s '$HOME/.config/glow/rig-board.json' -w \$((FZF_PREVIEW_COLUMNS - 2)) '$BOARD' </dev/null" \
         --preview-window 'up,75%,border-bottom' \
         --prompt '  link › ' --info=hidden \
