@@ -235,20 +235,22 @@ for repo in "${repos[@]}"; do
 done
 
 # ~~~ worktrees: <seat>/<repo> ~~~
-new_wts=() seat_added=()   # seat_added: builder worktrees made by this run
+# new_wts: worktrees to install in, i.e. made by this run, or kept from a run
+# whose install failed. seat_added: builder worktrees made by this run.
+new_wts=() seat_added=()
 for repo in "${repos[@]}"; do
   base_clone="$BASES_ROOT/$repo"
   # The lead's branch goes through ensure-worktree like start-dev's: resumes an
   # existing local/remote branch, otherwise cuts it from the fetched remote
   # base, which is each base clone's own upstream unless -b says otherwise.
-  [ -d "$lead_dir/$repo" ] || new_wts+=("$lead_dir/$repo")
+  [ -d "$lead_dir/$repo/node_modules" ] || new_wts+=("$lead_dir/$repo")
   mkdir -p "$lead_dir"
   "$HOME/.config/tmuxinator/scripts/ensure-worktree.sh" "$base_clone" "$lead_dir/$repo" "$branch" ${base:+"$base"}
 
   for seat in "${seats[@]:1}"; do
     wt="$rig_dir/$seat/$repo"
     b=$(seat_branch "$seat")
-    [ -d "$wt" ] && continue
+    if [ -d "$wt" ]; then [ -d "$wt/node_modules" ] || new_wts+=("$wt"); continue; fi
     is_shared "$repo" || { is_target "$seat" && is_wanted "$repo"; } || continue
     new_wts+=("$wt") seat_added+=("$seat/$repo")
     mkdir -p "$rig_dir/$seat"
@@ -291,7 +293,9 @@ if $install && [ ${#new_wts[@]} -gt 0 ]; then
     to_install+=("$wt")
   done
 fi
-install_cmd() { [ -f "$1/pnpm-lock.yaml" ] && echo "pnpm install" || echo "npm install"; }
+# Volta's pnpm shim refuses in a repo that lists pnpm as a dependency until
+# node_modules exists (packages does), so run the binary behind it.
+install_cmd() { [ -f "$1/pnpm-lock.yaml" ] && echo "$(volta which pnpm 2>/dev/null || command -v pnpm) install" || echo "npm install"; }
 install_log() { echo "$spec_dir/logs/install-$(basename "$(dirname "$1")")-$(basename "$1").log"; }
 
 # Prints one line per worktree whose install failed. A failure is retried once
