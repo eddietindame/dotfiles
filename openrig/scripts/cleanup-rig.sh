@@ -166,6 +166,13 @@ cleanup_v2() { # <rig.env>
 
   archive_notes "$rig" "$rig_dir/lead"
   stop_rig "$rig"
+  # Its GitHub backup (rig-backup.sh) goes too, unless another machine resumed
+  # the rig and owns that backup now.
+  if [ -f "$rig_dir/.rig/backup/handed-over" ]; then
+    say "cleanup-rig: $rig is owned by $(cat "$rig_dir/.rig/backup/handed-over") now; its backup on GitHub is left alone"
+  else
+    "$(dirname "$0")/rig-backup.sh" forget "$rig" || warn "cleanup-rig: couldn't remove $rig's backup refs; rig-backup.sh forget $rig"
+  fi
   # Every worktree under the rig folder, whichever clone it came from, so one an
   # agent added by hand goes too.
   worktrees_under "$rig_dir" | remove_worktrees
