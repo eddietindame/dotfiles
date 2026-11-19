@@ -210,7 +210,14 @@ case "${1:-}" in
   --state) fetch_prs; rig_state "$2" ;;   # debugging: what the summariser sees for one rig
   --view)   # the board above, its PR links below: type to filter, enter opens
     [ -s "$BOARD" ] || { echo "No board yet: it's being written (takes a minute or two)."; read -r -n1; exit; }
+    # On the headless mini, links open in the laptop's browser and copy to its
+    # clipboard (scripts only on that machine's branch); anywhere else, locally.
     tmux_scripts="$HOME/.config/tmux/scripts"
+    if [ -x "$tmux_scripts/open-on-laptop.sh" ]; then
+      open_cmd="'$tmux_scripts/open-on-laptop.sh'" copy_cmd="'$tmux_scripts/copy-on-laptop.sh'" where=" on laptop"
+    else
+      open_cmd=open copy_cmd=pbcopy where=""
+    fi
     python3 - "$DIR/links.tsv" <<'PY' |
 import sys
 path = sys.argv[1]   # long titles: fzf cuts them at the panel's edge
@@ -236,9 +243,9 @@ PY
         --preview "CLICOLOR_FORCE=1 glow -s '$HOME/.config/glow/rig-board.json' -w \$((FZF_PREVIEW_COLUMNS - 2)) '$BOARD' </dev/null" \
         --preview-window 'up,75%,border-bottom' \
         --prompt '  link › ' --info=hidden \
-        --header 'enter open on laptop · ctrl-y copy · ↑↓ pick · mouse/shift-↑↓ scroll board · esc close' \
-        --bind "enter:execute-silent('$tmux_scripts/open-on-laptop.sh' {2})" \
-        --bind "ctrl-y:execute-silent(printf %s {2} | '$tmux_scripts/copy-on-laptop.sh')" \
+        --header "enter open$where · ctrl-y copy · ↑↓ pick · mouse/shift-↑↓ scroll board · esc close" \
+        --bind "enter:execute-silent($open_cmd {2})" \
+        --bind "ctrl-y:execute-silent(printf %s {2} | $copy_cmd)" \
         --bind 'shift-up:preview-up,shift-down:preview-down,pgup:preview-page-up,pgdn:preview-page-down' >/dev/null
     ;;
   *) echo "usage: $(basename "$0") --start | --once | --view" >&2; exit 2 ;;
